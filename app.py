@@ -6,7 +6,7 @@ import uuid
 import os
 
 # --- 상수 및 기본 설정 ---
-ADMIN_PASSWORD = "admin1234"
+# ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
 
 # --- CSS 스타일 ---
 def apply_custom_css():
@@ -50,13 +50,32 @@ def initialize_app_state():
 # --- 구글 시트 및 데이터 처리 함수 ---
 @st.cache_resource
 def connect_to_sheet():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    credentials_path = os.path.join(script_dir, "credentials.json")
-    if os.path.exists(credentials_path):
-        creds = Credentials.from_service_account_file(credentials_path, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+    """Streamlit Cloud 또는 로컬 환경에 따라 구글 시트에 연결합니다."""
+    try:
+        # Streamlit Cloud에 배포된 경우, st.secrets에서 직접 자격 증명 생성
+        creds_json = {
+            "type": st.secrets["gcp_service_account"]["type"],
+            "project_id": st.secrets["gcp_service_account"]["project_id"],
+            "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+            "private_key": st.secrets["gcp_service_account"]["private_key"].replace('\n', '\n'),
+            "client_email": st.secrets["gcp_service_account"]["client_email"],
+            "client_id": st.secrets["gcp_service_account"]["client_id"],
+            "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+            "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"]
+        }
+        creds = Credentials.from_service_account_info(creds_json, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
-    else:
-        st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다."); st.stop()
+    except (AttributeError, KeyError):
+        # 로컬 환경에서 실행되는 경우, credentials.json 파일 사용
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        credentials_path = os.path.join(script_dir, "credentials.json")
+        if os.path.exists(credentials_path):
+            creds = Credentials.from_service_account_file(credentials_path, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+            return gspread.authorize(creds)
+        else:
+            st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다. 로컬에서는 credentials.json 파일이, Cloud에서는 Secrets 설정이 필요합니다."); st.stop()
 
 @st.cache_resource
 def get_sheet(_client, sheet_name="문제 목록"):
@@ -178,7 +197,9 @@ def render_problem_detail(problem, worksheet):
     else:
         password_input = st.text_input("문제 관리를 위해 비밀번호를 입력하세요.", type="password")
         if st.button("인증하기"):
-            if password_input == str(problem.get('password', '')) or password_input == ADMIN_PASSWORD:
+            # Secrets에서 관리자 비밀번호 가져오기. 없으면 None.
+            ADMIN_PASSWORD = st.secrets.get("general", {}).get("admin_password")
+            if password_input == str(problem.get('password', '')) or (ADMIN_PASSWORD and password_input == ADMIN_PASSWORD):
                 st.session_state.unlocked_problem_id = problem['id']; st.success("인증되었습니다."); st.rerun()
             else:
                 st.error("비밀번호가 틀렸습니다.")
