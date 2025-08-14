@@ -5,6 +5,7 @@ import pandas as pd
 import uuid
 import os
 import codecs
+import json
 
 # --- 상수 및 기본 설정 ---
 # ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
@@ -53,23 +54,12 @@ def initialize_app_state():
 def connect_to_sheet():
     """Streamlit Cloud 또는 로컬 환경에 따라 구글 시트에 연결합니다."""
     try:
-        # Streamlit Cloud에 배포된 경우, st.secrets에서 직접 자격 증명 생성
-        creds_json = {
-            "type": st.secrets["gcp_service_account"]["type"],
-            "project_id": st.secrets["gcp_service_account"]["project_id"],
-            "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
-            "private_key": codecs.decode(st.secrets["gcp_service_account"]["private_key"], "unicode_escape"),
-            "client_email": st.secrets["gcp_service_account"]["client_email"],
-            "client_id": st.secrets["gcp_service_account"]["client_id"],
-            "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
-            "token_uri": st.secrets["gcp_service_account"]["token_uri"],
-            "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
-            "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"],
-            "universe_domain": "googleapis.com"
-        }
+        # Streamlit Cloud에 배포된 경우, st.secrets에서 전체 JSON을 직접 로드
+        creds_json_str = st.secrets["gcp_creds_json"]
+        creds_json = json.loads(creds_json_str)
         creds = Credentials.from_service_account_info(creds_json, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
-    except (AttributeError, KeyError):
+    except (AttributeError, KeyError, json.JSONDecodeError):
         # 로컬 환경에서 실행되는 경우, credentials.json 파일 사용
         script_dir = os.path.dirname(os.path.abspath(__file__))
         credentials_path = os.path.join(script_dir, "credentials.json")
