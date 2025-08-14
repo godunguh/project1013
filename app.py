@@ -4,6 +4,7 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import uuid
 import os
+import codecs
 
 # --- 상수 및 기본 설정 ---
 # ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
@@ -52,34 +53,12 @@ def initialize_app_state():
 def connect_to_sheet():
     """Streamlit Cloud 또는 로컬 환경에 따라 구글 시트에 연결합니다."""
     try:
-        # --- START DEBUGGING CODE ---
-        import logging
-        logging.basicConfig(level=logging.INFO)
-
-        logging.info("Attempting to connect to Google Sheets using Streamlit Secrets.")
-        
-        if "gcp_service_account" not in st.secrets:
-            logging.error("Secrets configuration missing 'gcp_service_account'.")
-            st.error("Secrets configuration missing 'gcp_service_account'.")
-            st.stop()
-
-        raw_private_key = st.secrets.get("gcp_service_account", {}).get("private_key", "PRIVATE_KEY_NOT_FOUND")
-        if raw_private_key == "PRIVATE_KEY_NOT_FOUND":
-            logging.error("Could not find 'private_key' in secrets.")
-            st.error("Could not find 'private_key' in secrets.")
-            st.stop()
-        
-        logging.info(f"First 100 chars of raw private key: {raw_private_key[:100]}")
-        
-        processed_private_key = raw_private_key.replace('\n', '\n')
-        logging.info(f"First 100 chars of processed private key: {processed_private_key[:100]}")
-        # --- END DEBUGGING CODE ---
-
+        # Streamlit Cloud에 배포된 경우, st.secrets에서 직접 자격 증명 생성
         creds_json = {
             "type": st.secrets["gcp_service_account"]["type"],
             "project_id": st.secrets["gcp_service_account"]["project_id"],
             "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
-            "private_key": processed_private_key,
+            "private_key": codecs.decode(st.secrets["gcp_service_account"]["private_key"], "unicode_escape"),
             "client_email": st.secrets["gcp_service_account"]["client_email"],
             "client_id": st.secrets["gcp_service_account"]["client_id"],
             "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
@@ -90,10 +69,15 @@ def connect_to_sheet():
         }
         creds = Credentials.from_service_account_info(creds_json, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
-    except Exception as e:
-        logging.error(f"An exception occurred: {e}", exc_info=True)
-        st.error(f"An error occurred during Google Sheets connection. Please check the logs. Error: {e}")
-        st.stop()
+    except (AttributeError, KeyError):
+        # 로컬 환경에서 실행되는 경우, credentials.json 파일 사용
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        credentials_path = os.path.join(script_dir, "credentials.json")
+        if os.path.exists(credentials_path):
+            creds = Credentials.from_service_account_file(credentials_path, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+            return gspread.authorize(creds)
+        else:
+            st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다. 로컬에서는 credentials.json 파일이, Cloud에서는 Secrets 설정이 필요합니다."); st.stop()
 
 
 @st.cache_resource
