@@ -40,10 +40,15 @@ def apply_custom_css():
                 }
             }
 
-            /* Streamlit UI 요소 숨기기 (최종) */
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
+            /* --- Streamlit UI 요소 숨기기 (총력전) --- */
+            /* 알려진 모든 선택자를 대상으로 강제 숨김 처리 */
+            #MainMenu, header, footer {
+                visibility: hidden !important;
+            }
+            div[data-testid="stToolbar"],
+            div[data-testid="stDecoration"] {
+                display: none !important;
+            }
         </style>
     """, unsafe_allow_html=True)
 
