@@ -209,7 +209,7 @@ def render_creation_form(worksheet):
 
     title = st.text_input("📝 문제 제목", key="title")
     creator = st.text_input("👤 출제자 이름", key="creator")
-    category = st.selectbox("📚 분류", ["수학2", "확률과 통계", "독서", "영어"], index=None, key="category")
+    category = st.selectbox("📚 분류", ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"], index=None, key="category")
     password = st.text_input("🔒 비밀번호 설정", type="password", key="password")
     question = st.text_area("❓ 문제 내용", key="question")
     options = [st.text_input(f"선택지 {i+1}", key=f"opt{i+1}") for i in range(4)]
