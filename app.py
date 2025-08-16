@@ -24,12 +24,20 @@ def apply_custom_css():
             }
             h1 {
                 color: white;
+                font-size: 2.2rem; /* 기본 글씨 크기 조정 */
             }
             /* 페이지 부제목 */
             h2 {
                 border-bottom: 2px solid #0d6efd;
                 padding-bottom: 0.5rem;
                 color: #0d6efd;
+            }
+            
+            /* 모바일 화면 대응 */
+            @media (max-width: 768px) {
+                h1 {
+                    font-size: 1.8rem; /* 모바일에서 글씨 크기 더 줄이기 */
+                }
             }
         </style>
     """, unsafe_allow_html=True)
@@ -228,7 +236,7 @@ def render_creation_form(worksheet):
 # --- 메인 앱 로직 ---
 st.set_page_config(page_title="모두의 문제 게시판", layout="wide")
 apply_custom_css()
-st.title("📝 모두의 문제 게시판")
+st.title("📝 2학년 문제 공유 게시판")
 
 initialize_app_state()
 client = connect_to_sheet()
