@@ -61,27 +61,29 @@ def initialize_app_state():
 # --- 구글 시트 및 데이터 처리 함수 ---
 @st.cache_resource
 def connect_to_sheet():
-    """Streamlit Cloud 또는 로컬 환경에 따라 구글 시트에 연결합니다."""
-    try:
-        # Streamlit Cloud에 배포된 경우, st.secrets에서 인증 정보 사용
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        )
+    """다양한 환경(Cloud, Render, Local)에 맞춰 구글 시트에 연결합니다."""
+    # 1. Render 또는 다른 환경 변수 기반 플랫폼
+    if "GCP_CREDS_JSON" in os.environ:
+        creds_json_str = os.environ["GCP_CREDS_JSON"]
+        creds_json = json.loads(creds_json_str)
+        creds = Credentials.from_service_account_info(creds_json, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
-    except (AttributeError, KeyError):
-        # 로컬 환경에서 실행되는 경우, credentials.json 파일 사용
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        credentials_path = os.path.join(script_dir, "credentials.json")
-        if os.path.exists(credentials_path):
-            creds = Credentials.from_service_account_file(
-                credentials_path,
-                scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            )
-            return gspread.authorize(creds)
-        else:
-            st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다. 로컬에서는 credentials.json 파일이, Cloud에서는 Secrets 설정이 필요합니다.")
-            st.stop()
+    
+    # 2. Streamlit Cloud Secrets
+    if "gcp_service_account" in st.secrets:
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+        return gspread.authorize(creds)
+
+    # 3. 로컬 credentials.json 파일
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    credentials_path = os.path.join(script_dir, "credentials.json")
+    if os.path.exists(credentials_path):
+        creds = Credentials.from_service_account_file(credentials_path, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+        return gspread.authorize(creds)
+    
+    # 모든 방법 실패 시
+    st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다. 환경에 맞는 설정이 필요합니다.")
+    st.stop()
 
 
 @st.cache_resource
