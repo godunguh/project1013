@@ -14,11 +14,6 @@ import json
 def apply_custom_css():
     st.markdown(r"""
         <style>
-            /* --- 진단용 테스트 코드 --- */
-            .stApp {
-                background-color: pink !important;
-            }
-
             /* 메인 타이틀 */
             .st-emotion-cache-10trblm {
                 background-color: #0d6efd;
@@ -45,10 +40,10 @@ def apply_custom_css():
                 }
             }
 
-            /* Streamlit 장식 요소 (푸터 등) 강제 숨기기 */
-            div[data-testid="stDecoration"] {
-                display: none !important;
-            }
+            /* Streamlit UI 요소 숨기기 (최종) */
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
 
