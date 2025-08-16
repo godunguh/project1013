@@ -40,9 +40,9 @@ def apply_custom_css():
                 }
             }
 
-            /* Streamlit 브랜드 푸터 숨기기 */
-            footer {
-                visibility: hidden;
+            /* Streamlit 장식 요소 (푸터 등) 숨기기 */
+            div[data-testid="stDecoration"] {
+                display: none;
             }
         </style>
     """, unsafe_allow_html=True)
