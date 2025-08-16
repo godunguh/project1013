@@ -252,19 +252,41 @@ elif st.session_state.page == "상세":
 elif st.session_state.page == "만들기":
     render_creation_form(worksheet)
 
-# --- Streamlit UI 요소 숨기기 (JavaScript 방식) ---
-hide_streamlit_style = """
+# --- Streamlit UI 요소 숨기기 (최종 JavaScript 방식) ---
+hide_streamlit_elems = """
 <script>
-    // 앱 로드 후 0.5초 뒤에 실행하여 안정성 확보
-    setTimeout(function() {
-        // Streamlit Cloud의 푸터 요소 (왕관 아이콘, 링크 등)
-        const streamlitElements = parent.document.querySelectorAll('[data-testid="stDecoration"]');
-        streamlitElements.forEach(el => el.style.display = 'none');
+    const hideElements = () => {
+        // 대상 요소를 찾기 위한 모든 알려진 선택자 목록
+        const selectors = [
+            'div[data-testid="stToolbar"]',
+            'div[data-testid="stDecoration"]',
+            '#MainMenu',
+            'header',
+            'footer',
+            'a[href*="streamlit.io"]' // Streamlit 링크를 포함하는 모든 a 태그
+        ];
 
-        // Streamlit의 메인 메뉴 (햄버거 버튼)
-        const mainMenu = parent.document.querySelectorAll('[data-testid="stToolbar"]');
-        mainMenu.forEach(el => el.style.display = 'none');
-    }, 500);
+        let elementsFound = false;
+        const doc = window.parent.document;
+
+        selectors.forEach(selector => {
+            const elements = doc.querySelectorAll(selector);
+            elements.forEach(el => {
+                // a 태그의 경우, 부모 div를 숨겨서 전체 UI를 제거
+                let targetElement = (el.tagName === 'A') ? el.closest('div') : el;
+                if (targetElement && targetElement.style.display !== 'none') {
+                    targetElement.style.display = 'none';
+                    elementsFound = true;
+                }
+            });
+        });
+        return elementsFound;
+    };
+
+    // 100ms 간격으로 주기적으로 실행하여 UI 요소를 계속 확인하고 숨김
+    const intervalId = setInterval(() => {
+        hideElements();
+    }, 100);
 </script>
 """
-components.html(hide_streamlit_style, height=0)
+components.html(hide_streamlit_elems, height=0)
