@@ -39,6 +39,11 @@ def apply_custom_css():
                     font-size: 1.8rem; /* 모바일에서 글씨 크기 더 줄이기 */
                 }
             }
+
+            /* Streamlit 브랜드 푸터 숨기기 */
+            footer {
+                visibility: hidden;
+            }
         </style>
     """, unsafe_allow_html=True)
 
