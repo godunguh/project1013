@@ -40,9 +40,9 @@ def apply_custom_css():
                 }
             }
 
-            /* Streamlit 장식 요소 (푸터 등) 숨기기 */
+            /* Streamlit 장식 요소 (푸터 등) 강제 숨기기 */
             div[data-testid="stDecoration"] {
-                display: none;
+                display: none !important;
             }
         </style>
     """, unsafe_allow_html=True)
