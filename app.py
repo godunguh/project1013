@@ -158,7 +158,7 @@ def render_problem_list(problem_df):
     if df.empty: st.info("표시할 문제가 없습니다.")
     else:
         for index, row in df.iterrows():
-            if st.button(f"[{row['category']}] | {row['title']} = {row['creator']}", key=f"view_{row['id']}", use_container_width=True):
+            if st.button(f"[{row['category']}] | {row['title']} - {row['creator']}", key=f"view_{row['id']}", use_container_width=True):
                 st.session_state.selected_problem_id = row['id']
                 st.session_state.page = "상세"
                 st.rerun()
@@ -192,7 +192,7 @@ def render_problem_detail(problem, worksheet):
             current_answer_index = valid_edited_options.index(problem['answer']) if problem['answer'] in valid_edited_options else 0
             edited_answer = st.selectbox("정답 수정", valid_edited_options, index=current_answer_index)
 
-            if st.button("변경사항 저장"):
+            if st.button("변경사항 저장", type="primary"):
                 updated_data = problem.copy()
                 updated_data.update({"title": edited_title, "question": edited_question, "answer": edited_answer,
                                      "option1": edited_options[0], "option2": edited_options[1], 
@@ -200,9 +200,34 @@ def render_problem_detail(problem, worksheet):
                 update_problem(worksheet, problem['id'], updated_data)
                 st.success("문제가 업데이트되었습니다."); st.rerun()
         
-        if st.button("🗑️ 문제 삭제하기", type="primary"):
-            delete_problem(worksheet, problem['id'])
-            st.success("문제가 삭제되었습니다."); st.session_state.page = "목록"; st.rerun()
+        st.divider()
+
+        # --- 삭제 확인 로직 ---
+        problem_id = problem['id']
+        # 각 문제별로 삭제 확인 상태를 세션에 저장
+        if f'confirm_delete_{problem_id}' not in st.session_state:
+            st.session_state[f'confirm_delete_{problem_id}'] = False
+
+        # 삭제 확인 상태가 True이면, 확인 메시지와 버튼들을 보여줌
+        if st.session_state[f'confirm_delete_{problem_id}']:
+            st.error("정말로 이 문제를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
+            col1, col2, _ = st.columns([1.5, 1, 2])
+            with col1:
+                if st.button("✅ 예, 삭제합니다"):
+                    delete_problem(worksheet, problem_id)
+                    st.session_state[f'confirm_delete_{problem_id}'] = False
+                    st.success("문제가 삭제되었습니다.")
+                    st.session_state.page = "목록"
+                    st.rerun()
+            with col2:
+                if st.button("❌ 아니요, 취소합니다"):
+                    st.session_state[f'confirm_delete_{problem_id}'] = False
+                    st.rerun()
+        # 평소에는 일반 삭제 버튼을 보여줌
+        else:
+            if st.button("🗑️ 문제 삭제하기"):
+                st.session_state[f'confirm_delete_{problem_id}'] = True
+                st.rerun()
     else:
         password_input = st.text_input("문제 관리를 위해 비밀번호를 입력하세요.", type="password")
         if st.button("인증하기"):
