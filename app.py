@@ -14,6 +14,11 @@ import json
 def apply_custom_css():
     st.markdown(r"""
         <style>
+            /* --- 진단용 테스트 코드 --- */
+            .stApp {
+                background-color: pink !important;
+            }
+
             /* 메인 타이틀 */
             .st-emotion-cache-10trblm {
                 background-color: #0d6efd;
