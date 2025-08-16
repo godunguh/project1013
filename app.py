@@ -6,6 +6,7 @@ import uuid
 import os
 import codecs
 import json
+import streamlit.components.v1 as components
 
 # --- 상수 및 기본 설정 ---
 # ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
@@ -38,16 +39,6 @@ def apply_custom_css():
                 h1 {
                     font-size: 1.8rem; /* 모바일에서 글씨 크기 더 줄이기 */
                 }
-            }
-
-            /* --- Streamlit UI 요소 숨기기 (총력전) --- */
-            /* 알려진 모든 선택자를 대상으로 강제 숨김 처리 */
-            #MainMenu, header, footer {
-                visibility: hidden !important;
-            }
-            div[data-testid="stToolbar"],
-            div[data-testid="stDecoration"] {
-                display: none !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -244,7 +235,7 @@ def render_creation_form(worksheet):
             st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
 
 # --- 메인 앱 로직 ---
-st.set_page_config(page_title="모두의 문제 게시판", layout="wide")
+st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
 apply_custom_css()
 st.title("📝 2학년 문제 공유 게시판")
 
@@ -260,3 +251,20 @@ elif st.session_state.page == "상세":
     render_problem_detail(problem, worksheet)
 elif st.session_state.page == "만들기":
     render_creation_form(worksheet)
+
+# --- Streamlit UI 요소 숨기기 (JavaScript 방식) ---
+hide_streamlit_style = """
+<script>
+    // 앱 로드 후 0.5초 뒤에 실행하여 안정성 확보
+    setTimeout(function() {
+        // Streamlit Cloud의 푸터 요소 (왕관 아이콘, 링크 등)
+        const streamlitElements = parent.document.querySelectorAll('[data-testid="stDecoration"]');
+        streamlitElements.forEach(el => el.style.display = 'none');
+
+        // Streamlit의 메인 메뉴 (햄버거 버튼)
+        const mainMenu = parent.document.querySelectorAll('[data-testid="stToolbar"]');
+        mainMenu.forEach(el => el.style.display = 'none');
+    }, 500);
+</script>
+"""
+components.html(hide_streamlit_style, height=0)
