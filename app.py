@@ -206,8 +206,14 @@ def render_problem_detail(problem, worksheet):
     else:
         password_input = st.text_input("문제 관리를 위해 비밀번호를 입력하세요.", type="password")
         if st.button("인증하기"):
-            # Secrets에서 관리자 비밀번호 가져오기. 없으면 None.
-            ADMIN_PASSWORD = st.secrets.get("general", {}).get("admin_password")
+            # 다양한 환경(Render, Cloud)에 맞춰 관리자 비밀번호를 확인합니다.
+            ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+            if not ADMIN_PASSWORD:
+                try:
+                    ADMIN_PASSWORD = st.secrets.get("general", {}).get("admin_password")
+                except (AttributeError, FileNotFoundError): # st.secrets가 없는 환경 대비
+                    ADMIN_PASSWORD = None
+
             if password_input == str(problem.get('password', '')) or (ADMIN_PASSWORD and password_input == ADMIN_PASSWORD):
                 st.session_state.unlocked_problem_id = problem['id']; st.success("인증되었습니다."); st.rerun()
             else:
