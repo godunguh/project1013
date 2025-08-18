@@ -4,12 +4,12 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import uuid
 import os
-import codecs
 import json
 import streamlit.components.v1 as components
 
 # --- 상수 및 기본 설정 ---
 # ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
+HEADERS = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password", "explanation"]
 
 # --- CSS 스타일 ---
 def apply_custom_css():
@@ -53,7 +53,7 @@ def initialize_app_state():
     if 'unlocked_problem_id' not in st.session_state:
         st.session_state.unlocked_problem_id = None
     
-    keys_to_init = ['creator', 'title', 'question', 'opt1', 'opt2', 'opt3', 'opt4', 'password', 'category', 'answer']
+    keys_to_init = ['creator', 'title', 'question', 'opt1', 'opt2', 'opt3', 'opt4', 'password', 'category', 'answer', 'explanation']
     for key in keys_to_init:
         if key not in st.session_state:
             st.session_state[key] = "" if key not in ['category', 'answer'] else None
@@ -92,37 +92,34 @@ def get_sheet(_client, sheet_name="문제 목록"):
     try:
         spreadsheet = _client.open("MyQuizApp")
         worksheet = spreadsheet.worksheet(sheet_name)
-        # 헤더가 존재하는지 확인하고, 없으면 추가합니다. 이 작업은 캐시 덕분에 한 번만 실행됩니다.
-        headers = worksheet.row_values(1)
-        if not headers or "title" not in headers:
-             worksheet.insert_cols([["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password"]], col=1)
+        # 헤더가 존재하는지 확인하고, 없으면 추가합니다.
+        current_headers = worksheet.row_values(1)
+        if not all(header in current_headers for header in HEADERS):
+             worksheet.update('A1', [HEADERS])
         return worksheet
     except gspread.WorksheetNotFound:
         spreadsheet = _client.open("MyQuizApp")
         worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="100", cols="20")
-        headers = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password"]
-        worksheet.append_row(headers)
+        worksheet.append_row(HEADERS)
         return worksheet
 
 @st.cache_data(ttl=600)
 def load_data(_worksheet):
     """Google Sheet에서 데이터를 로드하고 10분 동안 캐시합니다."""
     records = _worksheet.get_all_records()
-    headers = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password"]
     if not records:
-        return pd.DataFrame(columns=headers)
+        return pd.DataFrame(columns=HEADERS)
     
     df = pd.DataFrame(records)
     # 모든 헤더가 있는지 확인
-    for col in headers:
+    for col in HEADERS:
         if col not in df.columns:
             df[col] = ""
     return df
 
 def save_problem(worksheet, data):
     """새로운 문제를 시트에 저장하고 캐시를 지웁니다."""
-    headers = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password"]
-    worksheet.append_row([data.get(h, "") for h in headers])
+    worksheet.append_row([data.get(h, "") for h in HEADERS])
     load_data.clear()
 
 def delete_problem(worksheet, problem_id):
@@ -136,8 +133,7 @@ def update_problem(worksheet, problem_id, data):
     """시트에서 문제를 업데이트하고 캐시를 지웁니다."""
     cell = worksheet.find(problem_id)
     if cell:
-        headers = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password"]
-        worksheet.update(f'A{cell.row}', [[data.get(h, "") for h in headers]])
+        worksheet.update(f'A{cell.row}', [[data.get(h, "") for h in HEADERS]])
         load_data.clear()
 
 # --- UI 렌더링 함수 ---
@@ -164,6 +160,10 @@ def render_problem_list(problem_df):
                 st.rerun()
 
 def render_problem_detail(problem, worksheet):
+    problem_id = problem['id']
+    if f"show_explanation_{problem_id}" not in st.session_state:
+        st.session_state[f"show_explanation_{problem_id}"] = False
+
     if st.button("⬅️ 목록으로 돌아가기"):
         st.session_state.page = "목록"; st.rerun()
 
@@ -177,38 +177,47 @@ def render_problem_detail(problem, worksheet):
         if st.button("정답 확인"):
             if user_answer == problem["answer"]:
                 st.success("정답입니다! 👍")
+                st.session_state[f"show_explanation_{problem_id}"] = True
             else:
                 st.error("틀렸습니다. 다시 시도해보세요. 👎")
+                st.session_state[f"show_explanation_{problem_id}"] = False
+    
+    if st.session_state[f"show_explanation_{problem_id}"] and problem.get('explanation'):
+        st.info(f"**해설:**\n\n{problem['explanation']}")
 
     st.divider()
     st.subheader("🔒 문제 관리")
     
-    if st.session_state.get('unlocked_problem_id') == problem['id']:
+    if st.session_state.get('unlocked_problem_id') == problem_id:
         with st.expander("✏️ 문제 수정하기", expanded=True):
             edited_title = st.text_input("제목 수정", value=problem['title'])
             edited_question = st.text_area("내용 수정", value=problem['question'])
+            edited_explanation = st.text_area("해설 수정", value=str(problem.get('explanation', '')))
             edited_options = [st.text_input(f"선택지 {i+1} 수정", value=problem.get(f'option{i+1}', '')) for i in range(4)]
             valid_edited_options = [opt for opt in edited_options if opt]
-            current_answer_index = valid_edited_options.index(problem['answer']) if problem['answer'] in valid_edited_options else 0
+            
+            current_answer_index = 0
+            if problem['answer'] in valid_edited_options:
+                current_answer_index = valid_edited_options.index(problem['answer'])
+            
             edited_answer = st.selectbox("정답 수정", valid_edited_options, index=current_answer_index)
 
             if st.button("변경사항 저장", type="primary"):
                 updated_data = problem.copy()
-                updated_data.update({"title": edited_title, "question": edited_question, "answer": edited_answer,
-                                     "option1": edited_options[0], "option2": edited_options[1], 
-                                     "option3": edited_options[2], "option4": edited_options[3]})
-                update_problem(worksheet, problem['id'], updated_data)
+                updated_data.update({
+                    "title": edited_title, "question": edited_question, "explanation": edited_explanation,
+                    "answer": edited_answer, "option1": edited_options[0], "option2": edited_options[1], 
+                    "option3": edited_options[2], "option4": edited_options[3]
+                })
+                update_problem(worksheet, problem_id, updated_data)
                 st.success("문제가 업데이트되었습니다."); st.rerun()
         
         st.divider()
 
         # --- 삭제 확인 로직 ---
-        problem_id = problem['id']
-        # 각 문제별로 삭제 확인 상태를 세션에 저장
         if f'confirm_delete_{problem_id}' not in st.session_state:
             st.session_state[f'confirm_delete_{problem_id}'] = False
 
-        # 삭제 확인 상태가 True이면, 확인 메시지와 버튼들을 보여줌
         if st.session_state[f'confirm_delete_{problem_id}']:
             st.error("정말로 이 문제를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
             col1, col2, _ = st.columns([1.5, 1, 2])
@@ -223,7 +232,6 @@ def render_problem_detail(problem, worksheet):
                 if st.button("❌ 아니요, 취소합니다"):
                     st.session_state[f'confirm_delete_{problem_id}'] = False
                     st.rerun()
-        # 평소에는 일반 삭제 버튼을 보여줌
         else:
             if st.button("🗑️ 문제 삭제하기"):
                 st.session_state[f'confirm_delete_{problem_id}'] = True
@@ -231,16 +239,15 @@ def render_problem_detail(problem, worksheet):
     else:
         password_input = st.text_input("문제 관리를 위해 비밀번호를 입력하세요.", type="password")
         if st.button("인증하기"):
-            # 다양한 환경(Render, Cloud)에 맞춰 관리자 비밀번호를 확인합니다.
             ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
             if not ADMIN_PASSWORD:
                 try:
                     ADMIN_PASSWORD = st.secrets.get("general", {}).get("admin_password")
-                except (AttributeError, FileNotFoundError): # st.secrets가 없는 환경 대비
+                except (AttributeError, FileNotFoundError):
                     ADMIN_PASSWORD = None
 
             if password_input == str(problem.get('password', '')) or (ADMIN_PASSWORD and password_input == ADMIN_PASSWORD):
-                st.session_state.unlocked_problem_id = problem['id']; st.success("인증되었습니다."); st.rerun()
+                st.session_state.unlocked_problem_id = problem_id; st.success("인증되었습니다."); st.rerun()
             else:
                 st.error("비밀번호가 틀렸습니다.")
 
@@ -254,16 +261,19 @@ def render_creation_form(worksheet):
     category = st.selectbox("📚 분류", ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"], index=None, key="category")
     password = st.text_input("🔒 비밀번호 설정", type="password", key="password")
     question = st.text_area("❓ 문제 내용", key="question")
+    explanation = st.text_area("📝 문제 풀이/해설", key="explanation")
     options = [st.text_input(f"선택지 {i+1}", key=f"opt{i+1}") for i in range(4)]
     answer = st.selectbox("✅ 정답 선택", [opt for opt in options if opt], index=None, key="answer")
 
     if st.button("문제 제출하기"):
-        if not all([title, creator, category, password, question, answer]) or not all(options):
-            st.warning("모든 필드를 채워주세요!")
+        if not all([title, creator, category, password, question, answer, explanation]) or not all(options):
+            st.warning("모든 필드를 채워주세요! (해설 포함)")
         else:
-            new_problem = {"id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
-                           "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                           "answer": answer, "creator": creator, "password": password}
+            new_problem = {
+                "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
+                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                "answer": answer, "creator": creator, "password": password, "explanation": explanation
+            }
             save_problem(worksheet, new_problem)
             st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
 
@@ -280,8 +290,14 @@ problem_df = load_data(worksheet)
 if st.session_state.page == "목록":
     render_problem_list(problem_df)
 elif st.session_state.page == "상세":
-    problem = problem_df[problem_df['id'] == st.session_state.selected_problem_id].iloc[0].to_dict()
-    render_problem_detail(problem, worksheet)
+    problem_df_filtered = problem_df[problem_df['id'] == st.session_state.selected_problem_id]
+    if not problem_df_filtered.empty:
+        problem = problem_df_filtered.iloc[0].to_dict()
+        render_problem_detail(problem, worksheet)
+    else:
+        st.error("선택된 문제를 찾을 수 없습니다. 목록으로 돌아갑니다.")
+        st.session_state.page = "목록"
+        st.rerun()
 elif st.session_state.page == "만들기":
     render_creation_form(worksheet)
 
