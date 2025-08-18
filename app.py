@@ -6,10 +6,22 @@ import uuid
 import os
 import json
 import streamlit.components.v1 as components
+import base64
+from io import BytesIO
 
 # --- 상수 및 기본 설정 ---
-# ADMIN_PASSWORD는 Streamlit Secrets 또는 로컬 환경 변수에서 가져옵니다.
-HEADERS = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password", "explanation"]
+HEADERS = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password", "explanation", "question_image", "explanation_image"]
+
+# --- 유틸리티 함수 ---
+def image_to_base64(image):
+    """Streamlit UploadedFile 객체를 Base64 문자열로 변환"""
+    buffered = BytesIO()
+    image.save(buffered, format=image.format)
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def base64_to_image(b64_string):
+    """Base64 문자열을 이미지로 디코딩"""
+    return base64.b64decode(b64_string)
 
 # --- CSS 스타일 ---
 def apply_custom_css():
@@ -170,6 +182,11 @@ def render_problem_detail(problem, worksheet):
     st.header(f"{problem['title']}")
     st.caption(f"출제자: {problem['creator']} | 분류: {problem['category']}")
     st.markdown(f"**문제 내용:**\n\n{problem['question']}")
+    if problem.get('question_image'):
+        try:
+            st.image(base64_to_image(problem['question_image']))
+        except Exception as e:
+            st.warning(f"문제 이미지를 불러오는 데 실패했습니다: {e}")
 
     options = [problem.get(f"option{i}") for i in range(1, 5) if problem.get(f"option{i}")]
     if options:
@@ -184,6 +201,11 @@ def render_problem_detail(problem, worksheet):
     
     if st.session_state[f"show_explanation_{problem_id}"] and problem.get('explanation'):
         st.info(f"**해설:**\n\n{problem['explanation']}")
+        if problem.get('explanation_image'):
+            try:
+                st.image(base64_to_image(problem['explanation_image']))
+            except Exception as e:
+                st.warning(f"해설 이미지를 불러오는 데 실패했습니다: {e}")
 
     st.divider()
     st.subheader("🔒 문제 관리")
@@ -192,7 +214,19 @@ def render_problem_detail(problem, worksheet):
         with st.expander("✏️ 문제 수정하기", expanded=True):
             edited_title = st.text_input("제목 수정", value=problem['title'])
             edited_question = st.text_area("내용 수정", value=problem['question'])
+            
+            if problem.get('question_image'):
+                st.write("현재 문제 이미지:")
+                st.image(base64_to_image(problem['question_image']))
+            new_question_image = st.file_uploader("새 문제 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+            
             edited_explanation = st.text_area("해설 수정", value=str(problem.get('explanation', '')))
+            
+            if problem.get('explanation_image'):
+                st.write("현재 해설 이미지:")
+                st.image(base64_to_image(problem['explanation_image']))
+            new_explanation_image = st.file_uploader("새 해설 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+
             edited_options = [st.text_input(f"선택지 {i+1} 수정", value=problem.get(f'option{i+1}', '')) for i in range(4)]
             valid_edited_options = [opt for opt in edited_options if opt]
             
@@ -209,6 +243,15 @@ def render_problem_detail(problem, worksheet):
                     "answer": edited_answer, "option1": edited_options[0], "option2": edited_options[1], 
                     "option3": edited_options[2], "option4": edited_options[3]
                 })
+                if new_question_image:
+                    from PIL import Image
+                    img = Image.open(new_question_image)
+                    updated_data['question_image'] = image_to_base64(img)
+                if new_explanation_image:
+                    from PIL import Image
+                    img = Image.open(new_explanation_image)
+                    updated_data['explanation_image'] = image_to_base64(img)
+
                 update_problem(worksheet, problem_id, updated_data)
                 st.success("문제가 업데이트되었습니다."); st.rerun()
         
@@ -260,8 +303,13 @@ def render_creation_form(worksheet):
     creator = st.text_input("👤 출제자 이름", key="creator")
     category = st.selectbox("📚 분류", ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"], index=None, key="category")
     password = st.text_input("🔒 비밀번호 설정", type="password", key="password")
+    
     question = st.text_area("❓ 문제 내용", key="question")
+    question_image = st.file_uploader("🖼️ 문제 이미지 추가", type=['png', 'jpg', 'jpeg'])
+    
     explanation = st.text_area("📝 문제 풀이/해설", key="explanation")
+    explanation_image = st.file_uploader("🖼️ 해설 이미지 추가", type=['png', 'jpg', 'jpeg'])
+
     options = [st.text_input(f"선택지 {i+1}", key=f"opt{i+1}") for i in range(4)]
     answer = st.selectbox("✅ 정답 선택", [opt for opt in options if opt], index=None, key="answer")
 
@@ -272,8 +320,18 @@ def render_creation_form(worksheet):
             new_problem = {
                 "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
                 "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                "answer": answer, "creator": creator, "password": password, "explanation": explanation
+                "answer": answer, "creator": creator, "password": password, "explanation": explanation,
+                "question_image": "", "explanation_image": ""
             }
+            if question_image:
+                from PIL import Image
+                img = Image.open(question_image)
+                new_problem['question_image'] = image_to_base64(img)
+            if explanation_image:
+                from PIL import Image
+                img = Image.open(explanation_image)
+                new_problem['explanation_image'] = image_to_base64(img)
+
             save_problem(worksheet, new_problem)
             st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
 
