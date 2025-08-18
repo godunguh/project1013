@@ -6,22 +6,14 @@ import uuid
 import os
 import json
 import streamlit.components.v1 as components
-import base64
 from io import BytesIO
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
 
 # --- 상수 및 기본 설정 ---
-HEADERS = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password", "explanation", "question_image", "explanation_image"]
-
-# --- 유틸리티 함수 ---
-def image_to_base64(image):
-    """Streamlit UploadedFile 객체를 Base64 문자열로 변환"""
-    buffered = BytesIO()
-    image.save(buffered, format=image.format)
-    return base64.b64encode(buffered.getvalue()).decode()
-
-def base64_to_image(b64_string):
-    """Base64 문자열을 이미지로 디코딩"""
-    return base64.b64decode(b64_string)
+HEADERS = ["id", "title", "category", "question", "option1", "option2", "option3", "option4", "answer", "creator", "password", "explanation", "question_image_id", "explanation_image_id"]
+DRIVE_FOLDER_NAME = "MyQuizApp Images"
 
 # --- CSS 스타일 ---
 def apply_custom_css():
@@ -70,41 +62,94 @@ def initialize_app_state():
         if key not in st.session_state:
             st.session_state[key] = "" if key not in ['category', 'answer'] else None
 
-# --- 구글 시트 및 데이터 처리 함수 ---
+# --- 구글 API 연결 함수 ---
 @st.cache_resource
-def connect_to_sheet():
-    """다양한 환경(Cloud, Render, Local)에 맞춰 구글 시트에 연결합니다."""
+def get_google_creds():
+    """다양한 환경에 맞춰 구글 인증 정보를 로드합니다."""
+    scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    
     # 1. Render 또는 다른 환경 변수 기반 플랫폼
     if "GCP_CREDS_JSON" in os.environ:
         creds_json_str = os.environ["GCP_CREDS_JSON"]
         creds_json = json.loads(creds_json_str)
-        creds = Credentials.from_service_account_info(creds_json, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
-        return gspread.authorize(creds)
+        return Credentials.from_service_account_info(creds_json, scopes=scopes)
     
     # 2. Streamlit Cloud Secrets
     if "gcp_service_account" in st.secrets:
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
-        return gspread.authorize(creds)
+        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
 
     # 3. 로컬 credentials.json 파일
     script_dir = os.path.dirname(os.path.abspath(__file__))
     credentials_path = os.path.join(script_dir, "credentials.json")
     if os.path.exists(credentials_path):
-        creds = Credentials.from_service_account_file(credentials_path, scopes=["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
-        return gspread.authorize(creds)
+        return Credentials.from_service_account_file(credentials_path, scopes=scopes)
     
     # 모든 방법 실패 시
-    st.error("🚨 구글 시트 연결 정보를 찾을 수 없습니다. 환경에 맞는 설정이 필요합니다.")
+    st.error("🚨 구글 API 연결 정보를 찾을 수 없습니다. 환경에 맞는 설정이 필요합니다.")
     st.stop()
 
+@st.cache_resource
+def get_gspread_client(_creds):
+    return gspread.authorize(_creds)
 
+@st.cache_resource
+def get_drive_service(_creds):
+    return build('drive', 'v3', credentials=_creds)
+
+# --- 구글 드라이브 처리 함수 ---
+@st.cache_resource
+def get_or_create_drive_folder(_drive_service, folder_name):
+    """지정된 이름의 폴더를 찾거나 생성하고 ID를 반환합니다."""
+    try:
+        q = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        response = _drive_service.files().list(q=q, spaces='drive', fields='files(id, name)').execute()
+        files = response.get('files', [])
+        if files:
+            return files[0].get('id')
+        else:
+            file_metadata = {'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
+            folder = _drive_service.files().create(body=file_metadata, fields='id').execute()
+            return folder.get('id')
+    except HttpError as error:
+        st.error(f"Google Drive 폴더 생성/조회 중 오류 발생: {error}")
+        return None
+
+def upload_image_to_drive(_drive_service, folder_id, image_file):
+    """이미지를 Google Drive에 업로드하고 파일 ID를 반환합니다."""
+    try:
+        file_metadata = {'name': f"{uuid.uuid4().hex}.png", 'parents': [folder_id]}
+        media = MediaIoBaseUpload(BytesIO(image_file.getvalue()), mimetype='image/png', resumable=True)
+        file = _drive_service.files().create(body=file_metadata, media_body=media, fields='id, webContentLink').execute() 
+        
+        # 파일 권한을 '누구나 볼 수 있게'로 설정
+        permission = {'type': 'anyone', 'role': 'reader'}
+        _drive_service.permissions().create(fileId=file.get('id'), body=permission).execute()
+        
+        return file.get('id')
+    except HttpError as error:
+        st.error(f"이미지 업로드 중 오류 발생: {error}")
+        return None
+
+def delete_file_from_drive(_drive_service, file_id):
+    """Google Drive에서 파일을 삭제합니다."""
+    if not file_id or not isinstance(file_id, str): return
+    try:
+        _drive_service.files().delete(fileId=file_id).execute()
+    except HttpError as error:
+        # 파일이 이미 삭제되었거나 찾을 수 없는 경우(404)는 무시
+        if error.resp.status == 404:
+            print(f"File with ID {file_id} not found. Already deleted.")
+        else:
+            st.warning(f"Drive 파일 삭제 중 오류 발생 (ID: {file_id}): {error}")
+
+
+# --- 구글 시트 처리 함수 ---
 @st.cache_resource
 def get_sheet(_client, sheet_name="문제 목록"):
     """워크시트 객체를 가져오고 리소스로 캐시합니다."""
     try:
         spreadsheet = _client.open("MyQuizApp")
         worksheet = spreadsheet.worksheet(sheet_name)
-        # 헤더가 존재하는지 확인하고, 없으면 추가합니다.
         current_headers = worksheet.row_values(1)
         if not all(header in current_headers for header in HEADERS):
              worksheet.update('A1', [HEADERS])
@@ -115,37 +160,40 @@ def get_sheet(_client, sheet_name="문제 목록"):
         worksheet.append_row(HEADERS)
         return worksheet
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_data(_worksheet):
-    """Google Sheet에서 데이터를 로드하고 10분 동안 캐시합니다."""
+    """Google Sheet에서 데이터를 로드하고 5분 동안 캐시합니다."""
     records = _worksheet.get_all_records()
     if not records:
         return pd.DataFrame(columns=HEADERS)
     
     df = pd.DataFrame(records)
-    # 모든 헤더가 있는지 확인
     for col in HEADERS:
         if col not in df.columns:
             df[col] = ""
     return df
 
 def save_problem(worksheet, data):
-    """새로운 문제를 시트에 저장하고 캐시를 지웁니다."""
     worksheet.append_row([data.get(h, "") for h in HEADERS])
     load_data.clear()
 
-def delete_problem(worksheet, problem_id):
-    """시트에서 문제를 삭제하고 캐시를 지웁니다."""
-    cell = worksheet.find(problem_id)
+def delete_problem(worksheet, drive_service, problem):
+    delete_file_from_drive(drive_service, problem.get('question_image_id'))
+    delete_file_from_drive(drive_service, problem.get('explanation_image_id'))
+    cell = worksheet.find(problem['id'])
     if cell:
         worksheet.delete_rows(cell.row)
         load_data.clear()
 
-def update_problem(worksheet, problem_id, data):
-    """시트에서 문제를 업데이트하고 캐시를 지웁니다."""
-    cell = worksheet.find(problem_id)
+def update_problem(worksheet, drive_service, old_problem, new_data):
+    if new_data.get('question_image_id') != old_problem.get('question_image_id'):
+        delete_file_from_drive(drive_service, old_problem.get('question_image_id'))
+    if new_data.get('explanation_image_id') != old_problem.get('explanation_image_id'):
+        delete_file_from_drive(drive_service, old_problem.get('explanation_image_id'))
+    
+    cell = worksheet.find(old_problem['id'])
     if cell:
-        worksheet.update(f'A{cell.row}', [[data.get(h, "") for h in HEADERS]])
+        worksheet.update(f'A{cell.row}', [[new_data.get(h, "") for h in HEADERS]])
         load_data.clear()
 
 # --- UI 렌더링 함수 ---
@@ -171,7 +219,7 @@ def render_problem_list(problem_df):
                 st.session_state.page = "상세"
                 st.rerun()
 
-def render_problem_detail(problem, worksheet):
+def render_problem_detail(problem, worksheet, drive_service):
     problem_id = problem['id']
     if f"show_explanation_{problem_id}" not in st.session_state:
         st.session_state[f"show_explanation_{problem_id}"] = False
@@ -182,11 +230,8 @@ def render_problem_detail(problem, worksheet):
     st.header(f"{problem['title']}")
     st.caption(f"출제자: {problem['creator']} | 분류: {problem['category']}")
     st.markdown(f"**문제 내용:**\n\n{problem['question']}")
-    if problem.get('question_image'):
-        try:
-            st.image(base64_to_image(problem['question_image']))
-        except Exception as e:
-            st.warning(f"문제 이미지를 불러오는 데 실패했습니다: {e}")
+    if problem.get('question_image_id'):
+        st.image(f"https://drive.google.com/uc?id={problem['question_image_id']}")
 
     options = [problem.get(f"option{i}") for i in range(1, 5) if problem.get(f"option{i}")]
     if options:
@@ -201,63 +246,55 @@ def render_problem_detail(problem, worksheet):
     
     if st.session_state[f"show_explanation_{problem_id}"] and problem.get('explanation'):
         st.info(f"**해설:**\n\n{problem['explanation']}")
-        if problem.get('explanation_image'):
-            try:
-                st.image(base64_to_image(problem['explanation_image']))
-            except Exception as e:
-                st.warning(f"해설 이미지를 불러오는 데 실패했습니다: {e}")
+        if problem.get('explanation_image_id'):
+            st.image(f"https://drive.google.com/uc?id={problem['explanation_image_id']}")
 
     st.divider()
     st.subheader("🔒 문제 관리")
     
     if st.session_state.get('unlocked_problem_id') == problem_id:
         with st.expander("✏️ 문제 수정하기", expanded=True):
-            edited_title = st.text_input("제목 수정", value=problem['title'])
-            edited_question = st.text_area("내용 수정", value=problem['question'])
+            updated_data = problem.copy()
+            updated_data['title'] = st.text_input("제목 수정", value=problem['title'])
+            updated_data['question'] = st.text_area("내용 수정", value=problem['question'])
             
-            if problem.get('question_image'):
+            if problem.get('question_image_id'):
                 st.write("현재 문제 이미지:")
-                st.image(base64_to_image(problem['question_image']))
-            new_question_image = st.file_uploader("새 문제 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+                st.image(f"https://drive.google.com/uc?id={problem['question_image_id']}")
+            if st.checkbox("문제 이미지 변경/삭제", key="q_img_del"):
+                new_question_image = st.file_uploader("새 문제 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+                if new_question_image:
+                    folder_id = get_or_create_drive_folder(drive_service, DRIVE_FOLDER_NAME)
+                    updated_data['question_image_id'] = upload_image_to_drive(drive_service, folder_id, new_question_image)
+                else:
+                    updated_data['question_image_id'] = ""
+
+            updated_data['explanation'] = st.text_area("해설 수정", value=str(problem.get('explanation', '')))
             
-            edited_explanation = st.text_area("해설 수정", value=str(problem.get('explanation', '')))
-            
-            if problem.get('explanation_image'):
+            if problem.get('explanation_image_id'):
                 st.write("현재 해설 이미지:")
-                st.image(base64_to_image(problem['explanation_image']))
-            new_explanation_image = st.file_uploader("새 해설 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+                st.image(f"https://drive.google.com/uc?id={problem['explanation_image_id']}")
+            if st.checkbox("해설 이미지 변경/삭제", key="e_img_del"):
+                new_explanation_image = st.file_uploader("새 해설 이미지 업로드 (기존 이미지 대체)", type=['png', 'jpg', 'jpeg'])
+                if new_explanation_image:
+                    folder_id = get_or_create_drive_folder(drive_service, DRIVE_FOLDER_NAME)
+                    updated_data['explanation_image_id'] = upload_image_to_drive(drive_service, folder_id, new_explanation_image)
+                else:
+                    updated_data['explanation_image_id'] = ""
 
             edited_options = [st.text_input(f"선택지 {i+1} 수정", value=problem.get(f'option{i+1}', '')) for i in range(4)]
             valid_edited_options = [opt for opt in edited_options if opt]
+            current_answer_index = valid_edited_options.index(problem['answer']) if problem['answer'] in valid_edited_options else 0
             
-            current_answer_index = 0
-            if problem['answer'] in valid_edited_options:
-                current_answer_index = valid_edited_options.index(problem['answer'])
-            
-            edited_answer = st.selectbox("정답 수정", valid_edited_options, index=current_answer_index)
+            updated_data['answer'] = st.selectbox("정답 수정", valid_edited_options, index=current_answer_index)
+            updated_data.update({f"option{i+1}": opt for i, opt in enumerate(edited_options)})
 
             if st.button("변경사항 저장", type="primary"):
-                updated_data = problem.copy()
-                updated_data.update({
-                    "title": edited_title, "question": edited_question, "explanation": edited_explanation,
-                    "answer": edited_answer, "option1": edited_options[0], "option2": edited_options[1], 
-                    "option3": edited_options[2], "option4": edited_options[3]
-                })
-                if new_question_image:
-                    from PIL import Image
-                    img = Image.open(new_question_image)
-                    updated_data['question_image'] = image_to_base64(img)
-                if new_explanation_image:
-                    from PIL import Image
-                    img = Image.open(new_explanation_image)
-                    updated_data['explanation_image'] = image_to_base64(img)
-
-                update_problem(worksheet, problem_id, updated_data)
+                update_problem(worksheet, drive_service, problem, updated_data)
                 st.success("문제가 업데이트되었습니다."); st.rerun()
         
         st.divider()
 
-        # --- 삭제 확인 로직 ---
         if f'confirm_delete_{problem_id}' not in st.session_state:
             st.session_state[f'confirm_delete_{problem_id}'] = False
 
@@ -266,35 +303,26 @@ def render_problem_detail(problem, worksheet):
             col1, col2, _ = st.columns([1.5, 1, 2])
             with col1:
                 if st.button("✅ 예, 삭제합니다"):
-                    delete_problem(worksheet, problem_id)
+                    delete_problem(worksheet, drive_service, problem)
                     st.session_state[f'confirm_delete_{problem_id}'] = False
                     st.success("문제가 삭제되었습니다.")
-                    st.session_state.page = "목록"
-                    st.rerun()
+                    st.session_state.page = "목록"; st.rerun()
             with col2:
                 if st.button("❌ 아니요, 취소합니다"):
-                    st.session_state[f'confirm_delete_{problem_id}'] = False
-                    st.rerun()
+                    st.session_state[f'confirm_delete_{problem_id}'] = False; st.rerun()
         else:
             if st.button("🗑️ 문제 삭제하기"):
-                st.session_state[f'confirm_delete_{problem_id}'] = True
-                st.rerun()
+                st.session_state[f'confirm_delete_{problem_id}'] = True; st.rerun()
     else:
         password_input = st.text_input("문제 관리를 위해 비밀번호를 입력하세요.", type="password")
         if st.button("인증하기"):
-            ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
-            if not ADMIN_PASSWORD:
-                try:
-                    ADMIN_PASSWORD = st.secrets.get("general", {}).get("admin_password")
-                except (AttributeError, FileNotFoundError):
-                    ADMIN_PASSWORD = None
-
+            ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or st.secrets.get("general", {}).get("admin_password")
             if password_input == str(problem.get('password', '')) or (ADMIN_PASSWORD and password_input == ADMIN_PASSWORD):
                 st.session_state.unlocked_problem_id = problem_id; st.success("인증되었습니다."); st.rerun()
             else:
                 st.error("비밀번호가 틀렸습니다.")
 
-def render_creation_form(worksheet):
+def render_creation_form(worksheet, drive_service):
     st.header("✍️ 새로운 문제 만들기")
     if st.button("⬅️ 목록으로 돌아가기"):
         st.session_state.page = "목록"; st.rerun()
@@ -314,86 +342,72 @@ def render_creation_form(worksheet):
     answer = st.selectbox("✅ 정답 선택", [opt for opt in options if opt], index=None, key="answer")
 
     if st.button("문제 제출하기"):
-        if not all([title, creator, category, password, question, answer, explanation]) or not all(options):
-            st.warning("모든 필드를 채워주세요! (해설 포함)")
+        if not all([title, creator, category, password, question, answer]) or not all(opt for opt in options if opt):
+            st.warning("이미지를 제외한 모든 필드를 채워주세요!")
         else:
-            new_problem = {
-                "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
-                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                "answer": answer, "creator": creator, "password": password, "explanation": explanation,
-                "question_image": "", "explanation_image": ""
-            }
-            if question_image:
-                from PIL import Image
-                img = Image.open(question_image)
-                new_problem['question_image'] = image_to_base64(img)
-            if explanation_image:
-                from PIL import Image
-                img = Image.open(explanation_image)
-                new_problem['explanation_image'] = image_to_base64(img)
-
-            save_problem(worksheet, new_problem)
-            st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
+            with st.spinner('이미지를 업로드하고 문제를 저장하는 중...'):
+                folder_id = get_or_create_drive_folder(drive_service, DRIVE_FOLDER_NAME)
+                if folder_id:
+                    new_problem = {
+                        "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
+                        "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                        "answer": answer, "creator": creator, "password": password, "explanation": explanation,
+                        "question_image_id": upload_image_to_drive(drive_service, folder_id, question_image) if question_image else "",
+                        "explanation_image_id": upload_image_to_drive(drive_service, folder_id, explanation_image) if explanation_image else ""
+                    }
+                    save_problem(worksheet, new_problem)
+                    st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
+                else:
+                    st.error("Google Drive 폴더를 찾거나 생성할 수 없어 문제를 저장할 수 없습니다.")
 
 # --- 메인 앱 로직 ---
-st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
-apply_custom_css()
-st.title("📝 2학년 문제 공유 게시판")
+def main():
+    st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
+    apply_custom_css()
+    st.title("📝 2학년 문제 공유 게시판")
 
-initialize_app_state()
-client = connect_to_sheet()
-worksheet = get_sheet(client)
-problem_df = load_data(worksheet)
+    initialize_app_state()
+    
+    creds = get_google_creds()
+    gspread_client = get_gspread_client(creds)
+    drive_service = get_drive_service(creds)
+    
+    worksheet = get_sheet(gspread_client)
+    problem_df = load_data(worksheet)
 
-if st.session_state.page == "목록":
-    render_problem_list(problem_df)
-elif st.session_state.page == "상세":
-    problem_df_filtered = problem_df[problem_df['id'] == st.session_state.selected_problem_id]
-    if not problem_df_filtered.empty:
-        problem = problem_df_filtered.iloc[0].to_dict()
-        render_problem_detail(problem, worksheet)
-    else:
-        st.error("선택된 문제를 찾을 수 없습니다. 목록으로 돌아갑니다.")
-        st.session_state.page = "목록"
-        st.rerun()
-elif st.session_state.page == "만들기":
-    render_creation_form(worksheet)
+    if st.session_state.page == "목록":
+        render_problem_list(problem_df)
+    elif st.session_state.page == "상세":
+        problem_df_filtered = problem_df[problem_df['id'] == st.session_state.selected_problem_id]
+        if not problem_df_filtered.empty:
+            problem = problem_df_filtered.iloc[0].to_dict()
+            render_problem_detail(problem, worksheet, drive_service)
+        else:
+            st.error("선택된 문제를 찾을 수 없습니다. 목록으로 돌아갑니다.")
+            st.session_state.page = "목록"; st.rerun()
+    elif st.session_state.page == "만들기":
+        render_creation_form(worksheet, drive_service)
 
-# --- Streamlit UI 요소 숨기기 (최종 JavaScript 방식) ---
+if __name__ == "__main__":
+    main()
+
+# --- Streamlit UI 요소 숨기기 ---
 hide_streamlit_elems = """
 <script>
     const hideElements = () => {
-        // 대상 요소를 찾기 위한 모든 알려진 선택자 목록
-        const selectors = [
-            'div[data-testid="stToolbar"]',
-            'div[data-testid="stDecoration"]',
-            '#MainMenu',
-            'header',
-            'footer',
-            'a[href*="streamlit.io"]' // Streamlit 링크를 포함하는 모든 a 태그
-        ];
-
-        let elementsFound = false;
+        const selectors = ['div[data-testid="stToolbar"]', 'div[data-testid="stDecoration"]', '#MainMenu', 'header', 'footer', 'a[href*="streamlit.io"]'];
         const doc = window.parent.document;
-
         selectors.forEach(selector => {
             const elements = doc.querySelectorAll(selector);
             elements.forEach(el => {
-                // a 태그의 경우, 부모 div를 숨겨서 전체 UI를 제거
                 let targetElement = (el.tagName === 'A') ? el.closest('div') : el;
                 if (targetElement && targetElement.style.display !== 'none') {
                     targetElement.style.display = 'none';
-                    elementsFound = true;
                 }
             });
         });
-        return elementsFound;
     };
-
-    // 100ms 간격으로 주기적으로 실행하여 UI 요소를 계속 확인하고 숨김
-    const intervalId = setInterval(() => {
-        hideElements();
-    }, 100);
+    const intervalId = setInterval(hideElements, 100);
 </script>
 """
 components.html(hide_streamlit_elems, height=0)
