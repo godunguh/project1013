@@ -240,7 +240,7 @@ def render_problem_list(problem_df):
 
 def render_problem_detail(problem, worksheet, drive_service):
     problem_id = problem['id']
-    problem_type = problem.get('question_type', '객관식') # 기본값은 객관식
+    problem_type = '주관식' if problem.get('question_type') == '주관식' else '객관식' # 값이 없거나 '주관식'이 아니면 '객관식'으로 처리
 
     if f"show_explanation_{problem_id}" not in st.session_state:
         st.session_state[f"show_explanation_{problem_id}"] = False
