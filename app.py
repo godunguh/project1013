@@ -16,7 +16,7 @@ from datetime import datetime
 
 # --- 상수 및 기본 설정 ---
 # !!! 중요 !!!: 관리자 대시보드에 접근할 수 있는 Google 계정 이메일을 여기에 입력하세요. 
-ADMIN_EMAIL = "jog50@gmail.com"
+ADMIN_EMAIL = "jwj1013kor@gmail.com"
 
 # Google Sheets 헤더 정의
 PROBLEM_HEADERS = [
@@ -381,7 +381,8 @@ async def main():
             st.session_state.page = "목록"; st.rerun()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # asyncio.run() 대신 create_task 사용
+    asyncio.create_task(main())
 
 # --- Streamlit UI 요소 숨기기 ---
 hide_streamlit_elems = """
