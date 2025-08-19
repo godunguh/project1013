@@ -380,6 +380,11 @@ async def main():
             # 기본 페이지로 이동
             st.session_state.page = "목록"; st.rerun()
 
-if __name__ == "__main__":
-    asyncio.run(main())
-
+    credentials = get_credentials()
+    if credentials:
+        files = await get_drive_files(credentials)
+        if files:
+            st.write("최근 10개 파일:")
+            for f in files:
+                st.write(f"- {f['name']}")
+asyncio.run(main())
