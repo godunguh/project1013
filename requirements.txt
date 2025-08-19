@@ -5,3 +5,4 @@ pandas
 google-api-python-client
 streamlit-oauth
 toml
+nest_asyncio
