@@ -11,8 +11,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 from streamlit_oauth import OAuth2Component
-import nest_asyncio
-nest_asyncio.apply()
 import asyncio
 from datetime import datetime
 
@@ -382,10 +380,6 @@ async def main():
             # 기본 페이지로 이동
             st.session_state.page = "목록"; st.rerun()
 
-async def main():
-    await some_async_function()
-    st.write("Async works!")
-
-asyncio.run(main())
-
+if __name__ == "__main__":
+    asyncio.run(main())
 
