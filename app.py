@@ -1,6 +1,3 @@
-import nest_asyncio
-nest_asyncio.apply()
-
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -14,7 +11,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 from streamlit_oauth import OAuth2Component
-import asyncio
 from datetime import datetime
 
 # --- 상수 및 기본 설정 ---
@@ -319,7 +315,7 @@ def render_dashboard(problem_df, solution_df):
         st.dataframe(solution_df)
 
 # --- 메인 앱 로직 ---
-async def main():
+def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
     apply_custom_css()
     st.title("📝 2학년 문제 공유 게시판")
@@ -333,7 +329,7 @@ async def main():
     oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT)
 
     if 'token' not in st.session_state or st.session_state.token is None:
-        result = await oauth2.authorize_button(
+        result = oauth2.authorize_button(
             name="구글 계정으로 로그인",
             icon="https://www.google.com/favicon.ico",
             redirect_uri=REDIRECT_URI,
@@ -384,4 +380,5 @@ async def main():
             # 기본 페이지로 이동
             st.session_state.page = "목록"; st.rerun()
 
-asyncio.run(main())
+if __name__ == "__main__":
+    main()
