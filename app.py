@@ -345,7 +345,8 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            st.session_state.user_info = st.session_state.token.get('userinfo')
+            # token 객체 자체를 user_info로 사용하여 안정성 확보
+            st.session_state.user_info = result.get("token")
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
