@@ -59,15 +59,17 @@ def initialize_app_state():
 # --- 구글 API 연결 함수 ---
 @st.cache_resource
 def get_google_creds():
+    """Google 서비스 계정 인증 정보를 로드합니다."""
     scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    if "gcp_service_account" in st.secrets:
-        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     
+    # credentials.json 파일 경로를 직접 지정하여 로드합니다.
     creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials.json")
+    
     if os.path.exists(creds_path):
         return Credentials.from_service_account_file(creds_path, scopes=scopes)
     
-    st.error("🚨 구글 서비스 계정 정보를 찾을 수 없습니다.")
+    # 파일이 없을 경우 명확한 에러 메시지 출력
+    st.error("🚨 `credentials.json` 파일을 찾을 수 없습니다. 프로젝트 폴더에 파일이 있는지 확인해주세요.")
     st.stop()
 
 @st.cache_resource
