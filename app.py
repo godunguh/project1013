@@ -148,17 +148,22 @@ def delete_problem(problem_sheet, drive_service, problem):
 # --- UI 렌더링 함수 ---
 def render_sidebar(user_info):
     with st.sidebar:
-        # user_info가 없거나 비어있는 경우를 대비한 방어 코드
         if not user_info or not isinstance(user_info, dict):
             st.warning("로그인 정보가 없습니다.")
             return
 
-        st.header(f"👋 {user_info.get('name', '사용자')}님")
-        st.write(f"_{user_info.get('email', '')}_")
+        # token 객체에서 userinfo를 추출하고, 없으면 token 객체 자체를 사용 (방어적 코딩)
+        user_details = user_info.get('userinfo', user_info)
+        
+        user_name = user_details.get('name', '사용자')
+        user_email = user_details.get('email', '')
+
+        st.header(f"👋 {user_name}님")
+        st.write(f"_{user_email}_")
         st.divider()
         
-        # 인자로 받은 user_info를 일관되게 사용
-        if user_info.get('email') == ADMIN_EMAIL:
+        # 이메일이 있는지 확인한 후 관리자 버튼 표시
+        if user_email and user_email == ADMIN_EMAIL:
             if st.button("📊 관리자 대시보드", use_container_width=True):
                 st.session_state.page = "대시보드"; st.rerun()
         
@@ -363,8 +368,8 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            # token 객체 내부의 'userinfo'를 사용자 정보로 지정해야 이름이 정상적으로 표시됩니다.
-            st.session_state.user_info = result.get("token").get('userinfo')
+            # 가장 안정적인 방식: token 객체 전체를 user_info로 저장
+            st.session_state.user_info = result.get("token")
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
