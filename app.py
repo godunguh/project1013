@@ -374,8 +374,14 @@ def main():
         # --- 사용자 정보 정규화 (가장 중요) ---
         # Google 응답이 어떻게 오든, 일관된 형식의 user_info를 만든다.
         user_details = raw_user_info.get('userinfo', raw_user_info)
+        
+        # 'name' 키가 없는 경우를 대비해 'given_name'도 확인하여 이름 표시 안정성 향상
+        user_name = user_details.get('name')
+        if not user_name:
+            user_name = user_details.get('given_name', '사용자')
+
         user_info = {
-            'name': user_details.get('name', '사용자'),
+            'name': user_name,
             'email': user_details.get('email', '')
         }
         # -----------------------------------------
