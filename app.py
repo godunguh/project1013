@@ -381,17 +381,6 @@ async def main():
             st.session_state.page = "목록"; st.rerun()
 
 if __name__ == "__main__":
-    # asyncio.run() 대신 create_task 사용
-    asyncio.create_task(main())
+    asyncio.run(main())
 
-# --- Streamlit UI 요소 숨기기 ---
-hide_streamlit_elems = """
-<script>
-    const intervalId = setInterval(() => {
-        const selectors = ['div[data-testid="stToolbar"]', 'div[data-testid="stDecoration"]', '#MainMenu', 'header', 'footer'];
-        const doc = window.parent.document;
-        selectors.forEach(s => doc.querySelectorAll(s).forEach(e => e.style.display = 'none'));
-    }, 100);
-</script>
-"""
-components.html(hide_streamlit_elems, height=0)
+
