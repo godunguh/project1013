@@ -29,7 +29,7 @@ DRIVE_FOLDER_NAME = "MyQuizApp Images"
 # OAuth2 설정 (secrets.toml 파일 사용)
 CLIENT_ID = st.secrets.get("oauth_credentials", {}).get("CLIENT_ID")
 CLIENT_SECRET = st.secrets.get("oauth_credentials", {}).get("CLIENT_SECRET")
-REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "https://study-inside.onrender.com/")
+REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "http://localhost:8501")
 AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
