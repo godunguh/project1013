@@ -5,6 +5,7 @@ import pandas as pd
 import uuid
 import os
 import json
+import base64
 import streamlit.components.v1 as components
 from io import BytesIO
 from googleapiclient.discovery import build
@@ -364,10 +365,6 @@ def main():
         # --- 로그인 후 앱 로직 ---
         raw_user_info = st.session_state.get("user_info")
 
-        # 디버깅: 수신된 사용자 정보 전체를 화면에 표시
-        st.subheader("수신된 사용자 정보 (디버깅용):")
-        st.json(raw_user_info)
-
         if not raw_user_info:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             if st.button("로그인 페이지로 돌아가기"):
@@ -376,16 +373,26 @@ def main():
             st.stop()
 
         # --- 사용자 정보 정규화 (가장 중요) ---
-        # Google 응답이 어떻게 오든, 일관된 형식의 user_info를 만든다.
-        user_details = raw_user_info.get('userinfo', raw_user_info)
-        
-        # 'name' 키가 없는 경우를 대비해 'given_name'도 확인하여 이름 표시 안정성 향상
-        user_name = user_details.get('name')
-        if not user_name:
-            user_name = user_details.get('given_name', '사용자')
+        user_details = {}
+        # 1. 이상적인 경우: 'userinfo' 객체가 이미 존재
+        if 'userinfo' in raw_user_info:
+            user_details = raw_user_info['userinfo']
+        # 2. 차선책: 'id_token'을 직접 디코딩
+        elif 'id_token' in raw_user_info:
+            try:
+                # JWT의 payload(두 번째 부분)를 디코딩
+                id_token = raw_user_info['id_token']
+                payload = id_token.split('.')[1]
+                # Base64 디코딩을 위해 패딩 추가
+                padded_payload = payload + '=' * (-len(payload) % 4)
+                decoded_payload = base64.urlsafe_b64decode(padded_payload)
+                user_details = json.loads(decoded_payload)
+            except Exception as e:
+                st.error(f"로그인 토큰 처리 중 오류 발생: {e}")
+                user_details = {} # 오류 발생 시 초기화
 
         user_info = {
-            'name': user_name,
+            'name': user_details.get('name', user_details.get('given_name', '사용자')),
             'email': user_details.get('email', '')
         }
         # -----------------------------------------
