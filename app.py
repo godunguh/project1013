@@ -381,10 +381,10 @@ async def main():
             st.session_state.page = "목록"; st.rerun()
 
     credentials = get_credentials()
-    if credentials:
+    if credentials is not None:
         files = await get_drive_files(credentials)
         if files:
-            st.write("최근 10개 파일:")
-            for f in files:
-                st.write(f"- {f['name']}")
+            st.write("최근 10개 파일:", files)
+    else:
+        st.warning("먼저 Authorization Code를 입력하세요!")
 asyncio.run(main())
