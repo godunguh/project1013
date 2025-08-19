@@ -380,7 +380,9 @@ async def main():
             # 기본 페이지로 이동
             st.session_state.page = "목록"; st.rerun()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+async def main():
+    await asyncio.sleep(1)  # 예시 비동기 작업
+    st.write("Async works!")
+st.experimental_async(main())
 
 
