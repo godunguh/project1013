@@ -1,3 +1,6 @@
+import nest_asyncio
+nest_asyncio.apply()
+
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
