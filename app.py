@@ -364,6 +364,10 @@ def main():
         # --- 로그인 후 앱 로직 ---
         raw_user_info = st.session_state.get("user_info")
 
+        # 디버깅: 수신된 사용자 정보 전체를 화면에 표시
+        st.subheader("수신된 사용자 정보 (디버깅용):")
+        st.json(raw_user_info)
+
         if not raw_user_info:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             if st.button("로그인 페이지로 돌아가기"):
