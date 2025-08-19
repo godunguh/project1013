@@ -60,24 +60,9 @@ def initialize_app_state():
 @st.cache_resource
 def get_google_creds():
     scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
     if "gcp_service_account" in st.secrets:
-        try:
-            creds_info = st.secrets["gcp_service_account"]
-            # st.secrets에서 읽어온 정보로 인증 정보 객체 생성 시도
-            return Credentials.from_service_account_info(creds_info, scopes=scopes)
-        except Exception as e:
-            # 실패 시, secrets.toml 파일의 private_key 형식 오류일 가능성이 높음
-            st.error("🚨 Streamlit Secrets의 서비스 계정 정보로 Google 인증에 실패했습니다.")
-            st.warning(
-                "이 문제는 보통 `secrets.toml` 파일의 `private_key` 형식이 잘못되었을 때 발생합니다. "
-                "private_key 값 앞뒤에 `\"\"\"` (큰따옴표 3개)가 올바르게 포함되었는지, "
-                "키 내용이 `credentials.json` 파일과 정확히 일치하는지 다시 확인해주세요."
-            )
-            st.code(f"오류 상세 정보: {e}", language="text")
-            st.stop()
-
-    # 로컬 개발용 credentials.json 파일 처리
+        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    
     creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials.json")
     if os.path.exists(creds_path):
         return Credentials.from_service_account_file(creds_path, scopes=scopes)
@@ -243,26 +228,43 @@ def render_problem_detail(problem, sheets, drive_service, user_info):
 
 def render_creation_form(worksheet, drive_service, user_info):
     st.header("✍️ 새로운 문제 만들기")
+
+    # 1. 문제 유형 선택 위젯을 form 밖으로 이동시켜 즉시 UI가 변경되도록 함
+    question_type = st.radio("📋 문제 유형", ('객관식', '주관식'), key="question_type_radio")
+
     with st.form("creation_form"):
         title = st.text_input("📝 문제 제목")
         category = st.selectbox("📚 분류", ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"], index=None)
-        question_type = st.radio("📋 문제 유형", ('객관식', '주관식'))
         question = st.text_area("❓ 문제 내용")
         question_image = st.file_uploader("🖼️ 문제 이미지 추가", type=['png', 'jpg', 'jpeg'])
         explanation = st.text_area("📝 문제 풀이/해설")
         explanation_image = st.file_uploader("🖼️ 해설 이미지 추가", type=['png', 'jpg', 'jpeg'])
 
+        options = ["", "", "", ""]
+        answer_payload = None
+
         if question_type == '객관식':
+            st.subheader("📝 선택지 입력")
             options = [st.text_input(f"선택지 {i+1}") for i in range(4)]
-            answer = st.selectbox("✅ 정답 선택", [opt for opt in options if opt], index=None)
-        else:
-            options = ["", "", "", ""]
-            answer = st.text_input("✅ 정답 입력")
-        
+            # 2. 불안정한 selectbox 대신, 고정된 radio 버튼으로 정답을 선택
+            answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=None, key="answer_radio")
+        else: # 주관식
+            answer_payload = st.text_input("✅ 정답 입력")
+
         submitted = st.form_submit_button("문제 제출하기", type="primary")
 
     if submitted:
-        is_valid = all([title, category, question, answer]) and (all(options) if question_type == '객관식' else True)
+        final_answer = ""
+        if question_type == '객관식':
+            if answer_payload:
+                # "선택지 1" -> 인덱스 0으로 변환
+                selected_idx = int(answer_payload.split(" ")[1]) - 1
+                if options[selected_idx]:
+                    final_answer = options[selected_idx]
+        else:
+            final_answer = answer_payload
+
+        is_valid = all([title, category, question, final_answer]) and (all(options) if question_type == '객관식' else True)
         if not is_valid:
             st.warning("이미지를 제외한 모든 필수 필드를 채워주세요!")
         else:
@@ -276,7 +278,7 @@ def render_creation_form(worksheet, drive_service, user_info):
                 new_problem = {
                     "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
                     "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                    "answer": answer, "creator_name": user_info['name'], "creator_email": user_info['email'],
+                    "answer": final_answer, "creator_name": user_info['name'], "creator_email": user_info['email'],
                     "explanation": explanation, "question_type": question_type,
                     "question_image_id": q_img_id, "explanation_image_id": e_img_id,
                     "created_at": datetime.now().isoformat()
