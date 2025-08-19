@@ -341,16 +341,6 @@ def render_dashboard(problem_df, solution_df):
 # --- 메인 앱 로직 ---
 def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
-    
-    # --- 디버깅 코드 추가 ---
-    # Render의 secrets가 제대로 로드되었는지 확인하기 위해 화면에 출력합니다.
-    if "gcp_service_account" in st.secrets:
-        st.success("✅ Streamlit Secrets에서 'gcp_service_account' 정보를 찾았습니다.")
-    else:
-        st.error("🚨 Streamlit Secrets에 'gcp_service_account' 정보가 없습니다.")
-        st.info("Render 대시보드 > Environment > Secret Files에 `.streamlit/secrets.toml` 파일이 올바르게 설정되었는지 확인하세요.")
-        # st.write("현재 로드된 Secrets:", st.secrets.to_dict()) # 필요시 이 줄의 주석을 해제하여 전체 내용을 확인하세요.
-
     apply_custom_css()
     st.title("📝 2학년 문제 공유 게시판")
 
