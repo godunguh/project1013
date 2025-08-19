@@ -343,7 +343,16 @@ def main():
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
-        user_info = st.session_state.user_info
+        user_info = st.session_state.get("user_info")
+
+        if not user_info:
+            st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
+            if st.button("로그인 페이지로 돌아가기"):
+                st.session_state.token = None
+                st.session_state.user_info = None
+                st.rerun()
+            st.stop()
+
         render_sidebar(user_info)
         
         if st.sidebar.button("로그아웃", use_container_width=True, type="secondary"):
