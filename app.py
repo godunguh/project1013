@@ -147,11 +147,17 @@ def delete_problem(problem_sheet, drive_service, problem):
 # --- UI 렌더링 함수 ---
 def render_sidebar(user_info):
     with st.sidebar:
+        # user_info가 없거나 비어있는 경우를 대비한 방어 코드
+        if not user_info or not isinstance(user_info, dict):
+            st.warning("로그인 정보가 없습니다.")
+            return
+
         st.header(f"👋 {user_info.get('name', '사용자')}님")
         st.write(f"_{user_info.get('email', '')}_")
         st.divider()
         
-        if st.session_state.user_info.get('email') == ADMIN_EMAIL:
+        # 인자로 받은 user_info를 일관되게 사용
+        if user_info.get('email') == ADMIN_EMAIL:
             if st.button("📊 관리자 대시보드", use_container_width=True):
                 st.session_state.page = "대시보드"; st.rerun()
         
