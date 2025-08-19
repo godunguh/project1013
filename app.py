@@ -376,19 +376,37 @@ def render_creation_form(worksheet, drive_service):
         else:
             with st.spinner('이미지를 업로드하고 문제를 저장하는 중...'):
                 folder_id = get_or_create_drive_folder(drive_service, DRIVE_FOLDER_NAME)
-                if folder_id:
+                if not folder_id:
+                    st.error("Google Drive 폴더를 찾거나 생성할 수 없어 문제를 저장할 수 없습니다.")
+                    return
+
+                question_image_id = ""
+                explanation_image_id = ""
+                upload_failed = False
+
+                if question_image:
+                    question_image_id = upload_image_to_drive(drive_service, folder_id, question_image)
+                    if not question_image_id:
+                        st.error("문제 이미지 업로드에 실패했습니다. 다시 시도해주세요.")
+                        upload_failed = True
+
+                if explanation_image and not upload_failed:
+                    explanation_image_id = upload_image_to_drive(drive_service, folder_id, explanation_image)
+                    if not explanation_image_id:
+                        st.error("해설 이미지 업로드에 실패했습니다. 다시 시도해주세요.")
+                        upload_failed = True
+                
+                if not upload_failed:
                     new_problem = {
                         "id": str(uuid.uuid4()), "title": title, "category": category, "question": question,
                         "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
                         "answer": answer, "creator": creator, "password": password, "explanation": explanation,
                         "question_type": question_type,
-                        "question_image_id": upload_image_to_drive(drive_service, folder_id, question_image) if question_image else "",
-                        "explanation_image_id": upload_image_to_drive(drive_service, folder_id, explanation_image) if explanation_image else ""
+                        "question_image_id": question_image_id,
+                        "explanation_image_id": explanation_image_id
                     }
                     save_problem(worksheet, new_problem)
                     st.success("🎉 문제가 성공적으로 만들어졌습니다!"); st.session_state.page = "목록"; st.rerun()
-                else:
-                    st.error("Google Drive 폴더를 찾거나 생성할 수 없어 문제를 저장할 수 없습니다.")
 
 # --- 메인 앱 로직 ---
 def main():
