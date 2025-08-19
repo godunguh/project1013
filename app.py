@@ -363,8 +363,8 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            # token 객체 자체를 user_info로 사용하여 안정성 확보
-            st.session_state.user_info = result.get("token")
+            # token 객체 내부의 'userinfo'를 사용자 정보로 지정해야 이름이 정상적으로 표시됩니다.
+            st.session_state.user_info = result.get("token").get('userinfo')
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
