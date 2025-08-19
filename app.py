@@ -60,15 +60,31 @@ def initialize_app_state():
 @st.cache_resource
 def get_google_creds():
     scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    if "gcp_service_account" in st.secrets:
-        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     
+    if "gcp_service_account" in st.secrets:
+        try:
+            creds_info = st.secrets["gcp_service_account"]
+            # st.secrets에서 읽어온 정보로 인증 정보 객체 생성 시도
+            return Credentials.from_service_account_info(creds_info, scopes=scopes)
+        except Exception as e:
+            # 실패 시, secrets.toml 파일의 private_key 형식 오류일 가능성이 높음
+            st.error("🚨 Streamlit Secrets의 서비스 계정 정보로 Google 인증에 실패했습니다.")
+            st.warning(
+                "이 문제는 보통 `secrets.toml` 파일의 `private_key` 형식이 잘못되었을 때 발생합니다. "
+                "private_key 값 앞뒤에 `\"\"\"` (큰따옴표 3개)가 올바르게 포함되었는지, "
+                "키 내용이 `credentials.json` 파일과 정확히 일치하는지 다시 확인해주세요."
+            )
+            st.code(f"오류 상세 정보: {e}", language="text")
+            st.stop()
+
+    # 로컬 개발용 credentials.json 파일 처리
     creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials.json")
     if os.path.exists(creds_path):
         return Credentials.from_service_account_file(creds_path, scopes=scopes)
     
     st.error("🚨 구글 서비스 계정 정보를 찾을 수 없습니다.")
     st.stop()
+
 
 @st.cache_resource
 def get_gspread_client(_creds): return gspread.authorize(_creds)
