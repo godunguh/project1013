@@ -148,22 +148,11 @@ def delete_problem(problem_sheet, drive_service, problem):
 # --- UI 렌더링 함수 ---
 def render_sidebar(user_info):
     with st.sidebar:
-        if not user_info or not isinstance(user_info, dict):
-            st.warning("로그인 정보가 없습니다.")
-            return
-
-        # token 객체에서 userinfo를 추출하고, 없으면 token 객체 자체를 사용 (방어적 코딩)
-        user_details = user_info.get('userinfo', user_info)
-        
-        user_name = user_details.get('name', '사용자')
-        user_email = user_details.get('email', '')
-
-        st.header(f"👋 {user_name}님")
-        st.write(f"_{user_email}_")
+        st.header(f"👋 {user_info['name']}님")
+        st.write(f"_{user_info['email']}_")
         st.divider()
         
-        # 이메일이 있는지 확인한 후 관리자 버튼 표시
-        if user_email and user_email == ADMIN_EMAIL:
+        if user_info['email'] == ADMIN_EMAIL:
             if st.button("📊 관리자 대시보드", use_container_width=True):
                 st.session_state.page = "대시보드"; st.rerun()
         
@@ -373,21 +362,28 @@ def main():
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
-        user_info = st.session_state.get("user_info")
+        raw_user_info = st.session_state.get("user_info")
 
-        if not user_info:
+        if not raw_user_info:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             if st.button("로그인 페이지로 돌아가기"):
-                st.session_state.token = None
-                st.session_state.user_info = None
+                st.session_state.clear() # 세션 전체 초기화
                 st.rerun()
             st.stop()
+
+        # --- 사용자 정보 정규화 (가장 중요) ---
+        # Google 응답이 어떻게 오든, 일관된 형식의 user_info를 만든다.
+        user_details = raw_user_info.get('userinfo', raw_user_info)
+        user_info = {
+            'name': user_details.get('name', '사용자'),
+            'email': user_details.get('email', '')
+        }
+        # -----------------------------------------
 
         render_sidebar(user_info)
         
         if st.sidebar.button("로그아웃", use_container_width=True, type="secondary"):
-            st.session_state.token = None
-            st.session_state.user_info = None
+            st.session_state.clear() # 세션 전체 초기화
             st.rerun()
 
         creds = get_google_creds()
