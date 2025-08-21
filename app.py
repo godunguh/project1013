@@ -50,11 +50,17 @@ def initialize_app_state():
 @st.cache_resource
 def init_supabase_client():
     """Supabase 클라이언트 초기화"""
-    supabase_url = st.secrets.get("supabase_url")
-    supabase_key = st.secrets.get("supabase_key")
-    if not supabase_url or not supabase_key:
-        st.error("🚨 Supabase URL과 Key가 secrets.toml 파일에 설정되지 않았습니다.")
+    try:
+        supabase_url = st.secrets["SUPABASE_URL"]
+        supabase_key = st.secrets["SUPABASE_KEY"]
+    except KeyError:
+        st.error("🚨 secrets.toml 파일에 SUPABASE_URL과 SUPABASE_KEY를 설정해야 합니다.")
         st.stop()
+    
+    if not supabase_url or not supabase_key:
+        st.error("🚨 Supabase URL 또는 Key 값이 비어있습니다. secrets.toml 파일을 확인하세요.")
+        st.stop()
+        
     return create_client(supabase_url, supabase_key)
 
 # --- Supabase Storage (파일) 처리 함수 ---
