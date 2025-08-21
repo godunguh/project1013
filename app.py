@@ -331,6 +331,22 @@ def main():
     problem_df = load_data_from_db(supabase, "problems")
     solution_df = load_data_from_db(supabase, "solutions")
 
+    # --- 데이터 로딩 디버그 ---
+    st.write("--- 데이터 로딩 디버그 ---")
+    st.write(f"problem_df 비어있나? -> {problem_df.empty}")
+    st.write(f"problem_df 행 개수: {len(problem_df)}")
+    if not problem_df.empty:
+        st.write("problem_df 상위 5개 데이터:")
+        st.dataframe(problem_df.head())
+    st.write("---")
+    st.write(f"solution_df 비어있나? -> {solution_df.empty}")
+    st.write(f"solution_df 행 개수: {len(solution_df)}")
+    if not solution_df.empty:
+        st.write("solution_df 상위 5개 데이터:")
+        st.dataframe(solution_df.head())
+    st.write("--- 디버그 끝 ---")
+    # --- 디버그 끝 ---
+
     if st.session_state.page == "목록":
         render_problem_list(problem_df)
     elif st.session_state.page == "상세":
