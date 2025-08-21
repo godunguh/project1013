@@ -6,6 +6,20 @@ from supabase import create_client, Client
 from datetime import datetime
 from io import BytesIO
 
+# --- DEBUGGING BLOCK ---
+st.write("---""- 디버깅 정보 ---""-")
+try:
+    st.write(f"현재 작업 디렉토리 (os.getcwd()): {os.getcwd()}")
+    st.write(f"'.streamlit' 폴더 존재 여부: {os.path.exists(os.path.join(os.getcwd(), '.streamlit'))}")
+    st.write(f"'secrets.toml' 파일 존재 여부: {os.path.exists(os.path.join(os.getcwd(), '.streamlit', 'secrets.toml'))}")
+    st.write("st.secrets 객체의 모든 키:")
+    st.write(st.secrets.keys())
+except Exception as e:
+    st.write(f"디버깅 정보 출력 중 오류 발생: {e}")
+st.write("---""- 디버깅 정보 끝 ---""-")
+# --- END DEBUGGING BLOCK ---
+
+
 # --- 상수 및 기본 설정 ---
 # !!! 중요 !!!: 관리자 대시보드에 접근할 수 있는 Google 계정 이메일을 여기에 입력하세요.
 ADMIN_EMAIL = "jwj1013kor@gmail.com"
