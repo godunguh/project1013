@@ -1,4 +1,3 @@
-[gcp_service_account]
 type = "service_account"
 project_id = "project1-468515"
 private_key_id = "edc5a944aac935353843404651fa76a716a3524a"
@@ -15,7 +14,7 @@ universe_domain = "googleapis.com"
 SUPABASE_URL= "https://xwighaogaagsxphbjzjk.supabase.co"
 SUPABASE_KEY= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3aWdoYW9nYWFnc3hwaGJqemprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3ODc3MjMsImV4cCI6MjA3MTM2MzcyM30.O0a8_imLT8kYjpKN5Ogc37BNpN_HNYAzJA9SYbd7VBQ"
 
-[oauth_credentials]
+
 CLIENT_ID = "509718433777-a2sttkik29nee0c4d7m8rgvkgvrh9l0p.apps.googleusercontent.com"
 CLIENT_SECRET = "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"
 REDIRECT_URI = "https://study-inside.onrender.com/"
