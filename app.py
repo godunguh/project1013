@@ -33,6 +33,10 @@ DRIVE_FOLDER_NAME = "MyQuizApp Images"
 # OAuth2 설정 (secrets.toml 파일 사용)
 CLIENT_ID = st.secrets.get("oauth_credentials", {}).get("CLIENT_ID")
 CLIENT_SECRET = st.secrets.get("oauth_credentials", {}).get("CLIENT_SECRET")
+if not CLIENT_ID:
+    CLIENT_ID = os.getenv("CLIENT_ID")
+if not CLIENT_SECRET:
+    CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "http://localhost:8501")
 AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
