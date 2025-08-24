@@ -402,13 +402,23 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            st.session_state.user_info = result
+            st.session_state.user_info = result  # 전체 결과 저장
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
-        raw_user_info = st.session_state.get("user_info")
+        raw_auth_result = st.session_state.get("user_info")
+        user_details = {}
 
-        if not raw_user_info or 'email' not in raw_user_info or 'name' not in raw_user_info:
+        # 사용자 정보가 최상위 레벨에 있는지, 'token' 내부에 있는지 확인
+        if isinstance(raw_auth_result, dict):
+            if 'email' in raw_auth_result and 'name' in raw_auth_result:
+                user_details = raw_auth_result
+            elif 'token' in raw_auth_result and isinstance(raw_auth_result.get('token'), dict):
+                token_details = raw_auth_result['token']
+                if 'email' in token_details and 'name' in token_details:
+                    user_details = token_details
+
+        if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             if st.button("로그인 페이지로 돌아가기"):
                 st.session_state.clear()
@@ -417,8 +427,8 @@ def main():
         
         # 사용자 정보 재구성
         user_info = {
-            'name': raw_user_info.get('name'),
-            'email': raw_user_info.get('email')
+            'name': user_details.get('name'),
+            'email': user_details.get('email')
         }
 
         # Supabase 클라이언트 초기화 및 앱 실행
