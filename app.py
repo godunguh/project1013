@@ -169,7 +169,11 @@ def delete_problem_from_db(supabase: Client, problem: dict):
         st.error(f"문제 삭제 오류: {e}")
 
 # --- UI 렌더링 함수 ---
-def render_sidebar(user_info):
+def render_sidebar():
+    user_info = st.session_state.get("user_info")  # ✅ 세션에서 직접 가져오기
+    if not user_info:
+        return  # 로그인 안 된 상태면 아무것도 안 보여줌
+
     with st.sidebar:
         st.header(f"👋 {user_info['name']}님")
         st.write(f"_{user_info['email']}_")
@@ -188,7 +192,7 @@ def render_sidebar(user_info):
         if st.sidebar.button("로그아웃", use_container_width=True, type="secondary"):
             st.session_state.user_info = None
             st.rerun()
-
+            
 def render_problem_list(problem_df):
     st.header("🔎 전체 문제 목록")
     search_query = st.text_input("🔎 문제 검색", placeholder="제목 또는 내용으로 검색하세요.")
