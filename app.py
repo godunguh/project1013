@@ -1,18 +1,45 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
 import uuid
 import os
-from supabase import create_client, Client
-from datetime import datetime
+import json
+import base64
+import streamlit.components.v1 as components
 from io import BytesIO
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.errors import HttpError
+from streamlit_oauth import OAuth2Component
+from datetime import datetime
 
-
+from supabase import create_client, Client
 
 
 # --- 상수 및 기본 설정 ---
 # !!! 중요 !!!: 관리자 대시보드에 접근할 수 있는 Google 계정 이메일을 여기에 입력하세요.
 ADMIN_EMAIL = "jwj1013kor@gmail.com"
 SUPABASE_BUCKET_NAME = "images"
+
+# Google Sheets 헤더 정의
+PROBLEM_HEADERS = [
+    "id", "title", "category", "question", "option1", "option2", "option3", "option4", 
+    "answer", "creator_name", "creator_email", "explanation", "question_image_id", 
+    "explanation_image_id", "question_type", "created_at"
+]
+SOLUTION_HEADERS = ["problem_id", "user_email", "user_name", "solved_at"]
+DRIVE_FOLDER_NAME = "MyQuizApp Images"
+
+# OAuth2 설정 (secrets.toml 파일 사용)
+CLIENT_ID = st.secrets.get("oauth_credentials", {}).get("CLIENT_ID")
+CLIENT_SECRET = st.secrets.get("oauth_credentials", {}).get("CLIENT_SECRET")
+REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "http://localhost:8501")
+AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
+SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
 
 # --- CSS 스타일 ---
 def apply_custom_css():
@@ -33,7 +60,22 @@ def initialize_app_state():
     """앱 세션 상태 초기화"""
     if 'page' not in st.session_state: st.session_state.page = "목록"
     if 'selected_problem_id' not in st.session_state: st.session_state.selected_problem_id = None
+    if 'token' not in st.session_state: st.session_state.token = None
     if 'user_info' not in st.session_state: st.session_state.user_info = None
+
+# --- 구글 API 연결 함수 ---
+@st.cache_resource
+def get_google_creds():
+    scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    if "gcp_service_account" in st.secrets:
+        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    
+    creds_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials.json")
+    if os.path.exists(creds_path):
+        return Credentials.from_service_account_file(creds_path, scopes=scopes)
+    
+    st.error("🚨 구글 서비스 계정 정보를 찾을 수 없습니다.")
+    st.stop()
 
 # --- Supabase 연결 함수 ---
 @st.cache_resource
@@ -307,61 +349,37 @@ def main():
     st.title("📝 2학년 문제 공유 게시판")
 
     initialize_app_state()
-    supabase = init_supabase_client()
 
-    # --- 간단한 세션 기반 로그인 ---
-    if "user_info" not in st.session_state or st.session_state.user_info is None:
-        st.header("로그인")
-        with st.form("login_form"):
-            email = st.text_input("이메일")
-            name = st.text_input("이름")
-            submitted = st.form_submit_button("로그인")
-            if submitted:
-                if email and name:
-                    st.session_state.user_info = {"email": email, "name": name}
-                    st.rerun()
-                else:
-                    st.warning("이메일과 이름을 모두 입력해주세요.")
+    if not all([CLIENT_ID, CLIENT_SECRET]):
+        st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
         st.stop()
 
-    # --- 로그인 후 앱 로직 ---
-    user_info = st.session_state.user_info
-    render_sidebar(user_info)
-    
-    problem_df = load_data_from_db(supabase, "problems")
-    solution_df = load_data_from_db(supabase, "solutions")
+    oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT)
 
-    # --- 데이터 로딩 디버그 ---
-    st.write("--- 데이터 로딩 디버그 ---")
-    st.write(f"problem_df 비어있나? -> {problem_df.empty}")
-    st.write(f"problem_df 행 개수: {len(problem_df)}")
-    if not problem_df.empty:
-        st.write("problem_df 상위 5개 데이터:")
-        st.dataframe(problem_df.head())
-    st.write("---")
-    st.write(f"solution_df 비어있나? -> {solution_df.empty}")
-    st.write(f"solution_df 행 개수: {len(solution_df)}")
-    if not solution_df.empty:
-        st.write("solution_df 상위 5개 데이터:")
-        st.dataframe(solution_df.head())
-    st.write("--- 디버그 끝 ---")
-    # --- 디버그 끝 ---
-
-    if st.session_state.page == "목록":
-        render_problem_list(problem_df)
-    elif st.session_state.page == "상세":
-        problem_df_filtered = problem_df[problem_df['id'] == st.session_state.selected_problem_id]
-        if not problem_df_filtered.empty:
-            problem = problem_df_filtered.iloc[0].to_dict()
-            render_problem_detail(problem, supabase, user_info)
-        else:
-            st.error("문제를 찾을 수 없습니다."); st.session_state.page = "목록"; st.rerun()
-    elif st.session_state.page == "만들기":
-        render_creation_form(supabase, user_info)
-    elif st.session_state.page == "대시보드" and user_info.get('email') == ADMIN_EMAIL:
-        render_dashboard(problem_df, solution_df)
+    if 'token' not in st.session_state or st.session_state.token is None:
+        result = oauth2.authorize_button(
+            name="구글 계정으로 로그인",
+            icon="https://www.google.com/favicon.ico",
+            redirect_uri=REDIRECT_URI,
+            scope="openid email profile",
+            key="google_login",
+            use_container_width=True,
+        )
+        if result and "token" in result:
+            st.session_state.token = result.get("token")
+            # 가장 안정적인 방식: token 객체 전체를 user_info로 저장
+            st.session_state.user_info = result.get("token")
+            st.rerun()
     else:
-        st.session_state.page = "목록"; st.rerun()
+        # --- 로그인 후 앱 로직 ---
+        raw_user_info = st.session_state.get("user_info")
+
+        if not raw_user_info:
+            st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
+            if st.button("로그인 페이지로 돌아가기"):
+                st.session_state.clear() # 세션 전체 초기화
+                st.rerun()
+            st.stop()
 
 if __name__ == "__main__":
     main()
