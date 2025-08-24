@@ -13,8 +13,8 @@ from googleapiclient.errors import HttpError
 from streamlit_oauth import OAuth2Component
 from datetime import datetime
 import requests
-import jwt   # ✅ PyJWT 사용
-import json
+import jwt
+
 
 from supabase import create_client, Client
 
