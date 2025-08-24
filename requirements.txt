@@ -1,6 +1,6 @@
 google-cloud-storage
 google-auth
-streamlit==1.37.0
+streamlit
 supabase
 pandas
 google-api-python-client
