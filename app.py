@@ -345,6 +345,38 @@ def render_dashboard(problem_df, solution_df):
         st.subheader("📚 전체 문제 데이터"); st.dataframe(problem_df)
         st.subheader("📝 전체 풀이 기록"); st.dataframe(solution_df)
 
+# --- 앱 실행 로직 ---
+def run_app(supabase, user_info):
+    """로그인 후 실행되는 메인 애플리케이션 로직"""
+    # 1. 데이터 로드
+    problem_df = load_data_from_db(supabase, "problems")
+    solution_df = load_data_from_db(supabase, "solutions")
+
+    # 2. 사이드바 렌더링
+    render_sidebar(user_info)
+
+    # 3. 페이지 상태에 따라 다른 UI 렌더링
+    page = st.session_state.get("page", "목록")
+
+    if page == "목록":
+        render_problem_list(problem_df)
+    elif page == "상세":
+        problem_id = st.session_state.get("selected_problem_id")
+        if problem_id and not problem_df.empty:
+            selected_problem = problem_df[problem_df['id'] == problem_id].iloc[0].to_dict()
+            render_problem_detail(selected_problem, supabase, user_info)
+        else:
+            st.warning("문제를 찾을 수 없거나 선택되지 않았습니다. 목록으로 돌아갑니다.")
+            st.session_state.page = "목록"
+            st.rerun()
+    elif page == "만들기":
+        render_creation_form(supabase, user_info)
+    elif page == "대시보드" and user_info['email'] == ADMIN_EMAIL:
+        render_dashboard(problem_df, solution_df)
+    else:
+        st.session_state.page = "목록"
+        st.rerun()
+
 # --- 메인 앱 로직 ---
 def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
@@ -370,19 +402,28 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            # 가장 안정적인 방식: token 객체 전체를 user_info로 저장
-            st.session_state.user_info = result.get("token")
+            st.session_state.user_info = result
             st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
         raw_user_info = st.session_state.get("user_info")
 
-        if not raw_user_info:
+        if not raw_user_info or 'email' not in raw_user_info or 'name' not in raw_user_info:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             if st.button("로그인 페이지로 돌아가기"):
-                st.session_state.clear() # 세션 전체 초기화
+                st.session_state.clear()
                 st.rerun()
             st.stop()
+        
+        # 사용자 정보 재구성
+        user_info = {
+            'name': raw_user_info.get('name'),
+            'email': raw_user_info.get('email')
+        }
+
+        # Supabase 클라이언트 초기화 및 앱 실행
+        supabase = init_supabase_client()
+        run_app(supabase, user_info)
 
 if __name__ == "__main__":
     main()
