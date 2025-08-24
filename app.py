@@ -37,7 +37,7 @@ if not CLIENT_ID:
     CLIENT_ID = os.getenv("CLIENT_ID")
 if not CLIENT_SECRET:
     CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "http://localhost:8501")
+REDIRECT_URI = st.secrets.get("oauth_credentials", {}).get("REDIRECT_URI", "https://study-inside.onrender.com")
 AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
