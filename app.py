@@ -389,34 +389,51 @@ def main():
         st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
         st.stop()
 
-    oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT)
-
-    if 'token' not in st.session_state or st.session_state.token is None:
-        result = oauth2.authorize_button(
-            name="구글 계정으로 로그인",
-            icon="https://www.google.com/favicon.ico",
-            redirect_uri="https://study-inside.onrender.com",
-            scope="openid email profile",
-            key="google_login",
-            use_container_width=True,
+    # ✅ OAuth2Component를 세션에 보관 (state 불일치 방지)
+    if "oauth2" not in st.session_state:
+        st.session_state.oauth2 = OAuth2Component(
+            CLIENT_ID,
+            CLIENT_SECRET,
+            AUTHORIZE_ENDPOINT,
+            TOKEN_ENDPOINT,
+            TOKEN_ENDPOINT,
+            REVOKE_ENDPOINT,
         )
-        if result and "token" in result:
-            # --- 디버깅 코드 ---
-            st.subheader("디버깅 정보: 로그인 결과")
-            st.json(result) 
-            # --- /디버깅 코드 ---
-            st.session_state.token = result.get("token")
-            st.session_state.user_info = result
-            st.rerun()
+    oauth2 = st.session_state.oauth2
+
+    # 로그인 진행 여부 플래그
+    if "login_in_progress" not in st.session_state:
+        st.session_state.login_in_progress = False
+
+    # 아직 로그인 안 했을 때
+    if "token" not in st.session_state or st.session_state.token is None:
+        if not st.session_state.login_in_progress:
+            result = oauth2.authorize_button(
+                name="구글 계정으로 로그인",
+                icon="https://www.google.com/favicon.ico",
+                redirect_uri="https://study-inside.onrender.com",  # ✅ 구글 콘솔과 반드시 동일하게
+                scope="openid email profile",
+                key="google_login",
+                use_container_width=True,
+            )
+            if result and "token" in result:
+                # --- 디버깅 코드 ---
+                st.subheader("디버깅 정보: 로그인 결과")
+                st.json(result)
+                # --- /디버깅 코드 ---
+
+                st.session_state.token = result.get("token")
+                st.session_state.user_info = result
+                st.session_state.login_in_progress = True
+                st.rerun()
     else:
         # --- 로그인 후 앱 로직 ---
         raw_auth_result = st.session_state.get("user_info")
         user_details = {}
 
-        # 사용자 정보가 'token' 딕셔너리 내부에 있는지 확인 (가장 일반적인 구조)
-        if isinstance(raw_auth_result, dict) and 'token' in raw_auth_result:
-            token_details = raw_auth_result.get('token')
-            if isinstance(token_details, dict) and 'email' in token_details and 'name' in token_details:
+        if isinstance(raw_auth_result, dict) and "token" in raw_auth_result:
+            token_details = raw_auth_result.get("token")
+            if isinstance(token_details, dict) and "email" in token_details and "name" in token_details:
                 user_details = token_details
 
         if not user_details:
@@ -429,13 +446,14 @@ def main():
                 st.session_state.clear()
                 st.rerun()
             st.stop()
-        
+
         # 사용자 정보 재구성
         user_info = {
-            'name': user_details.get('name'),
-            'email': user_details.get('email')
+            "name": user_details.get("name"),
+            "email": user_details.get("email"),
         }
-
+        st.success(f"환영합니다, {user_info['name']}님!")
+        
         # Supabase 클라이언트 초기화 및 앱 실행
         supabase = init_supabase_client()
         run_app(supabase, user_info)
