@@ -382,34 +382,27 @@ def run_app(supabase, user_info):
 # --- 메인 앱 로직 ---
 def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
+    apply_custom_css()
     st.title("📝 2학년 문제 공유 게시판")
 
-    # --- OAuth2Component를 세션에 보관 (state 불일치 방지) ---
-    if "oauth2" not in st.session_state:
-        st.session_state.oauth2 = OAuth2Component(
-            CLIENT_ID,
-            CLIENT_SECRET,
-            AUTHORIZE_ENDPOINT,
-            TOKEN_ENDPOINT,
-            TOKEN_ENDPOINT,
-            REVOKE_ENDPOINT,
-        )
-    oauth2 = st.session_state.oauth2
+    initialize_app_state()
 
-    # 로그인 세션 체크
-    if "token" not in st.session_state or st.session_state.token is None:
-        # 로그인 버튼
+    if not all([CLIENT_ID, CLIENT_SECRET]):
+        st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
+        st.stop()
+
+    oauth2 = OAuth2Component(CLIENT_ID, CLIENT_SECRET, AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT)
+
+    if 'token' not in st.session_state or st.session_state.token is None:
         result = oauth2.authorize_button(
             name="구글 계정으로 로그인",
             icon="https://www.google.com/favicon.ico",
-            redirect_uri=REDIRECT_URI,
+            redirect_uri="https://study-inside.onrender.com",
             scope="openid email profile",
             key="google_login",
             use_container_width=True,
         )
-
         if result and "token" in result:
-            # 디버깅용 출력
             st.subheader("디버깅 정보: 로그인 결과")
             st.json(result)
 
@@ -418,43 +411,24 @@ def main():
             st.rerun()
 
     else:
-        # --- 로그인 후 ---
         raw_auth_result = st.session_state.get("user_info")
         token_details = raw_auth_result.get("token", {})
-        user_details = {}
 
-        # 1) id_token 디코딩해서 사용자 정보 가져오기
-        id_token = token_details.get("id_token")
-        if id_token:
+        user_info = {}
+
+        if "id_token" in token_details:
             try:
-                decoded = jwt.decode(id_token, options={"verify_signature": False})
-                user_details = {
+                # JWT 디코딩 (검증 X, 단순 payload 확인용)
+                decoded = jwt.decode(token_details["id_token"], options={"verify_signature": False})
+                user_info = {
                     "name": decoded.get("name"),
                     "email": decoded.get("email"),
                     "picture": decoded.get("picture"),
                 }
             except Exception as e:
-                st.warning(f"id_token 디코딩 실패: {e}")
+                st.error(f"id_token 디코딩 실패: {e}")
 
-        # 2) id_token에서 못 가져오면 userinfo API 요청
-        if not user_details and "access_token" in token_details:
-            try:
-                resp = requests.get(
-                    "https://www.googleapis.com/oauth2/v3/userinfo",
-                    headers={"Authorization": f"Bearer {token_details['access_token']}"}
-                )
-                if resp.status_code == 200:
-                    info = resp.json()
-                    user_details = {
-                        "name": info.get("name"),
-                        "email": info.get("email"),
-                        "picture": info.get("picture"),
-                    }
-            except Exception as e:
-                st.warning(f"userinfo API 호출 실패: {e}")
-
-        # 사용자 정보 최종 확인
-        if not user_details:
+        if not user_info:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             st.subheader("디버깅 정보: 세션에 저장된 값")
             st.json(raw_auth_result)
@@ -463,12 +437,9 @@ def main():
                 st.rerun()
             st.stop()
 
-        # --- 사용자 정보 표시 ---
-        st.success(f"환영합니다, {user_details['name']}님! 👋")
-        if user_details.get("picture"):
-            st.image(user_details["picture"], width=80)
-
-        st.write(f"**이메일:** {user_details['email']}")
+        # ✅ 정상적으로 사용자 정보 표시
+        st.success(f"{user_info['name']} ({user_info['email']}) 님 환영합니다!")
+        st.image(user_info.get("picture"))
         
         # Supabase 클라이언트 초기화 및 앱 실행
         supabase = init_supabase_client()
