@@ -395,7 +395,7 @@ def main():
         result = oauth2.authorize_button(
             name="구글 계정으로 로그인",
             icon="https://www.google.com/favicon.ico",
-            #redirect_uri="https://study-inside.onrender.com",
+            redirect_uri="https://study-inside.onrender.com",
             scope="openid email profile",
             key="google_login",
             use_container_width=True,
