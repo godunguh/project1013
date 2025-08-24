@@ -5,3 +5,4 @@ supabase
 pandas
 google-api-python-client
 streamlit_oauth
+oauth2client
