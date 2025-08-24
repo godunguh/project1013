@@ -3,3 +3,4 @@ google-auth
 streamlit
 supabase
 pandas
+google-api-python-client
