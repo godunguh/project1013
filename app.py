@@ -182,7 +182,7 @@ def render_sidebar(user_info):
             if st.button("📊 관리자 대시보드", key="sidebar_btn_dashboard", use_container_width=True):
                 st.session_state.page = "대시보드"; st.rerun()
         
-        if st.button("📝 문제 목록", key="sidebar_btn_list", use_container_width=True):
+        if st.button("📝 문제 목록", key="sidebar_btn_list_first", use_container_width=True):
             st.session_state.page = "목록"; st.rerun()
         
         if st.button("✍️ 새로운 문제 만들기", key="sidebar_btn_create", use_container_width=True):
