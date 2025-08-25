@@ -179,19 +179,16 @@ def render_sidebar(user_info):
         st.divider()
         
         if user_info['email'] == ADMIN_EMAIL:
-            if st.button("📊 관리자 대시보드", use_container_width=True, key="btn_dashboard"):
-                st.session_state.page = "대시보드"
-                st.rerun()
+            if st.button("📊 관리자 대시보드", key="sidebar_btn_dashboard", use_container_width=True):
+                st.session_state.page = "대시보드"; st.rerun()
         
-        if st.button("📝 문제 목록", use_container_width=True, key="btn_list"):
-            st.session_state.page = "목록"
-            st.rerun()
+        if st.button("📝 문제 목록", key="sidebar_btn_list", use_container_width=True):
+            st.session_state.page = "목록"; st.rerun()
         
-        if st.button("✍️ 새로운 문제 만들기", use_container_width=True, key="btn_create"):
-            st.session_state.page = "만들기"
-            st.rerun()
+        if st.button("✍️ 새로운 문제 만들기", key="sidebar_btn_create", use_container_width=True):
+            st.session_state.page = "만들기"; st.rerun()
         
-        if st.sidebar.button("로그아웃", use_container_width=True, type="secondary", key="btn_logout"):
+        if st.button("로그아웃", key="sidebar_btn_logout", use_container_width=True, type="secondary"):
             st.session_state.user_info = None
             st.rerun()
             
