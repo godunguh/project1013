@@ -177,19 +177,22 @@ def render_sidebar(user_info):
         st.header(f"👋 {user_info['name']}님")
         st.write(f"_{user_info['email']}_")
         st.divider()
-
-        if user_info['email'] == "관리자메일@도메인.com":  # ✅ ADMIN_EMAIL 변수 대체
-            if st.button("📊 관리자 대시보드", use_container_width=True):
-                st.session_state.page = "대시보드"; st.rerun()
-
-        if st.button("📝 문제 목록", use_container_width=True):
-            st.session_state.page = "목록"; st.rerun()
-
-        if st.button("✍️ 새로운 문제 만들기", use_container_width=True):
-            st.session_state.page = "만들기"; st.rerun()
-
-        if st.sidebar.button("로그아웃", use_container_width=True, type="secondary"):
-            st.session_state.clear()
+        
+        if user_info['email'] == ADMIN_EMAIL:
+            if st.button("📊 관리자 대시보드", use_container_width=True, key="btn_dashboard"):
+                st.session_state.page = "대시보드"
+                st.rerun()
+        
+        if st.button("📝 문제 목록", use_container_width=True, key="btn_list"):
+            st.session_state.page = "목록"
+            st.rerun()
+        
+        if st.button("✍️ 새로운 문제 만들기", use_container_width=True, key="btn_create"):
+            st.session_state.page = "만들기"
+            st.rerun()
+        
+        if st.sidebar.button("로그아웃", use_container_width=True, type="secondary", key="btn_logout"):
+            st.session_state.user_info = None
             st.rerun()
             
 def render_problem_list(problem_df):
