@@ -448,6 +448,7 @@ def main():
 
         # ✅ 사이드바 실행
         render_sidebar(st.session_state.user_info)
+        run_app(supabase, user_details)
 
 if __name__ == "__main__":
     initialize_app_state()
