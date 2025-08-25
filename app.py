@@ -439,6 +439,9 @@ def main():
                 st.rerun()
             st.stop()
 
+        # ✅ user_details를 세션 상태에 저장하여 일관성 유지
+        st.session_state.user_info = user_details
+
         # ✅ 로그인 성공 시
         st.success(f"환영합니다, {user_details['name']}님!")
         st.image(user_details["picture"], width=100)
@@ -446,7 +449,7 @@ def main():
         
         # Supabase 클라이언트 초기화 및 앱 실행
         supabase = init_supabase_client()
-        run_app(supabase, user_info)
+        run_app(supabase, user_details)
 
 if __name__ == "__main__":
     main()
