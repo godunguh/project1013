@@ -63,11 +63,14 @@ def apply_custom_css():
 
 # --- 상태 관리 함수 ---
 def initialize_app_state():
-    """앱 세션 상태 초기화"""
-    if 'page' not in st.session_state: st.session_state.page = "목록"
-    if 'selected_problem_id' not in st.session_state: st.session_state.selected_problem_id = None
-    if 'token' not in st.session_state: st.session_state.token = None
-    if 'user_info' not in st.session_state: st.session_state.user_info = None
+    if 'page' not in st.session_state: 
+        st.session_state.page = "목록"
+    if 'selected_problem_id' not in st.session_state: 
+        st.session_state.selected_problem_id = None
+    if 'token' not in st.session_state: 
+        st.session_state.token = None
+    if 'user_info' not in st.session_state: 
+        st.session_state.user_info = None
 
 # --- 구글 API 연결 함수 ---
 @st.cache_resource
@@ -169,28 +172,24 @@ def delete_problem_from_db(supabase: Client, problem: dict):
         st.error(f"문제 삭제 오류: {e}")
 
 # --- UI 렌더링 함수 ---
-def render_sidebar():
-    user_info = st.session_state.get("user_info")  # ✅ 세션에서 직접 가져오기
-    if not user_info:
-        return  # 로그인 안 된 상태면 아무것도 안 보여줌
-
+def render_sidebar(user_info):
     with st.sidebar:
         st.header(f"👋 {user_info['name']}님")
         st.write(f"_{user_info['email']}_")
         st.divider()
-        
-        if user_info['email'] == ADMIN_EMAIL:
+
+        if user_info['email'] == "관리자메일@도메인.com":  # ✅ ADMIN_EMAIL 변수 대체
             if st.button("📊 관리자 대시보드", use_container_width=True):
                 st.session_state.page = "대시보드"; st.rerun()
-        
+
         if st.button("📝 문제 목록", use_container_width=True):
             st.session_state.page = "목록"; st.rerun()
-        
+
         if st.button("✍️ 새로운 문제 만들기", use_container_width=True):
             st.session_state.page = "만들기"; st.rerun()
-        
+
         if st.sidebar.button("로그아웃", use_container_width=True, type="secondary"):
-            st.session_state.user_info = None
+            st.session_state.clear()
             st.rerun()
             
 def render_problem_list(problem_df):
@@ -360,7 +359,7 @@ def run_app(supabase, user_info):
     solution_df = load_data_from_db(supabase, "solutions")
 
     # 2. 사이드바 렌더링
-    render_sidebar()
+    render_sidebar(user_info)
 
     # 3. 페이지 상태에 따라 다른 UI 렌더링
     page = st.session_state.get("page", "목록")
@@ -398,6 +397,7 @@ def main():
         AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT
     )
 
+    # 1️⃣ 로그인 안 된 경우
     if 'token' not in st.session_state or st.session_state.token is None:
         result = oauth2.authorize_button(
             name="구글 계정으로 로그인",
@@ -409,19 +409,18 @@ def main():
         )
         if result and "token" in result:
             st.session_state.token = result.get("token")
-            st.session_state.user_info = result
             st.rerun()
-    else:
-        raw_auth_result = st.session_state.get("user_info")
-        token_details = raw_auth_result.get("token", {})
 
-        # ✅ id_token 디코딩
+    # 2️⃣ 로그인 된 경우
+    else:
+        token_details = st.session_state.get("token", {})
+
         user_details = {}
         if "id_token" in token_details:
             try:
                 decoded = jwt.decode(
                     token_details["id_token"],
-                    options={"verify_signature": False}  # 개발용, 검증 비활성화
+                    options={"verify_signature": False}
                 )
                 user_details = {
                     "name": decoded.get("name"),
@@ -433,23 +432,23 @@ def main():
 
         if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
-            st.json(raw_auth_result)  # 디버깅 출력
+            st.json(token_details)  # 🔍 디버깅
             if st.button("로그인 페이지로 돌아가기"):
                 st.session_state.clear()
                 st.rerun()
             st.stop()
 
-        # ✅ user_details를 세션 상태에 저장하여 일관성 유지
         st.session_state.user_info = user_details
 
-        # ✅ 로그인 성공 시
+        # 로그인 성공 UI
         st.success(f"환영합니다, {user_details['name']}님!")
-        st.image(user_details["picture"], width=100)
+        if user_details.get("picture"):
+            st.image(user_details["picture"], width=100)
         st.write("이메일:", user_details["email"])
-        
-        # Supabase 클라이언트 초기화 및 앱 실행
-        supabase = init_supabase_client()
-        run_app(supabase, user_details)
+
+        # ✅ 사이드바 실행
+        render_sidebar(st.session_state.user_info)
 
 if __name__ == "__main__":
+    initialize_app_state()
     main()
