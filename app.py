@@ -169,7 +169,7 @@ def delete_problem_from_db(supabase: Client, problem: dict):
         st.error(f"문제 삭제 오류: {e}")
 
 # --- UI 렌더링 함수 ---
-def render_sidebar(st.session_state.user_info):
+def render_sidebar():
     user_info = st.session_state.get("user_info")  # ✅ 세션에서 직접 가져오기
     if not user_info:
         return  # 로그인 안 된 상태면 아무것도 안 보여줌
@@ -360,7 +360,7 @@ def run_app(supabase, user_info):
     solution_df = load_data_from_db(supabase, "solutions")
 
     # 2. 사이드바 렌더링
-    render_sidebar(user_info)
+    render_sidebar()
 
     # 3. 페이지 상태에 따라 다른 UI 렌더링
     page = st.session_state.get("page", "목록")
