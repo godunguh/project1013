@@ -34,13 +34,19 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- 상태 관리 ---
 def initialize_app_state():
-    if 'page' not in st.session_state:
+    # 🔑 예전에 쓰던 오래된 키 정리
+    old_keys = ["sidebar_btn_list_first", "sidebar_btn_list", "btn_list"]
+    for k in old_keys:
+        if k in st.session_state:
+            del st.session_state[k]
+
+    if 'page' not in st.session_state: 
         st.session_state.page = "목록"
-    if 'selected_problem_id' not in st.session_state:
+    if 'selected_problem_id' not in st.session_state: 
         st.session_state.selected_problem_id = None
-    if 'token' not in st.session_state:
+    if 'token' not in st.session_state: 
         st.session_state.token = None
-    if 'user_info' not in st.session_state:
+    if 'user_info' not in st.session_state: 
         st.session_state.user_info = None
 
 # --- Supabase 파일 처리 ---
