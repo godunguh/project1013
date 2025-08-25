@@ -178,18 +178,21 @@ def render_sidebar(user_info):
         st.write(f"_{user_info['email']}_")
         st.divider()
         
-        if user_info['email'] == ADMIN_EMAIL:
+        if user_info["email"] == ADMIN_EMAIL:
             if st.button("📊 관리자 대시보드", key="sidebar_btn_dashboard", use_container_width=True):
-                st.session_state.page = "대시보드"; st.rerun()
-        
+                st.session_state.page = "대시보드"
+                st.rerun()
+
         if st.button("📝 문제 목록", key="sidebar_btn_list_first", use_container_width=True):
-            st.session_state.page = "목록"; st.rerun()
-        
+            st.session_state.page = "목록"
+            st.rerun()
+
         if st.button("✍️ 새로운 문제 만들기", key="sidebar_btn_create", use_container_width=True):
-            st.session_state.page = "만들기"; st.rerun()
-        
-        if st.button("로그아웃", key="sidebar_btn_logout", use_container_width=True, type="secondary"):
-            st.session_state.user_info = None
+            st.session_state.page = "만들기"
+            st.rerun()
+
+        if st.button("🚪 로그아웃", key="sidebar_btn_logout", use_container_width=True):
+            st.session_state.clear()
             st.rerun()
             
 def render_problem_list(problem_df):
@@ -210,10 +213,11 @@ def render_problem_list(problem_df):
     st.divider()
     if df.empty: st.info("표시할 문제가 없습니다.")
     else:
-        for _, row in df.iterrows():
-            if st.button(f"[{row['category']}] | {row['title']} - {row['creator_name']}", key=f"view_{row['id']}", use_container_width=True):
+        for _, row in problem_df.iterrows():
+            if st.button(row['title'], key=f"view_{row['id']}"):
                 st.session_state.selected_problem_id = row['id']
-                st.session_state.page = "상세"; st.rerun()
+                st.session_state.page = "상세"
+                st.rerun()
 
 def render_problem_detail(problem, supabase, user_info):
     problem_id = problem['id']
@@ -228,7 +232,9 @@ def render_problem_detail(problem, supabase, user_info):
     options = [problem.get(f"option{i}") for i in range(1, 5) if problem.get(f"option{i}")]
     user_answer = st.radio("정답:", options, index=None) if problem_type == '객관식' else st.text_input("정답 입력")
 
-    if st.button("정답 확인"):
+    if st.button("정답 확인", key=f"check_answer_{problem_id}"):
+        st.session_state[f"show_solution_{problem_id}"] = True
+        st.rerun()
         is_correct = str(user_answer).strip() == str(problem["answer"]).strip()
         if is_correct:
             st.success("정답입니다! 👍")
@@ -433,7 +439,7 @@ def main():
         if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
             st.json(token_details)  # 🔍 디버깅
-            if st.button("로그인 페이지로 돌아가기"):
+            if st.button("로그인 페이지로 돌아가기", key="btn_back_to_login"):
                 st.session_state.clear()
                 st.rerun()
             st.stop()
