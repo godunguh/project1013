@@ -46,7 +46,7 @@ TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
 SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
-
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- CSS 스타일 ---
 def apply_custom_css():
     st.markdown(r"""
