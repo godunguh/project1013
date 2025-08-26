@@ -225,45 +225,42 @@ def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
     st.title("📝 2학년 문제 공유 게시판")
 
+    # 🔍 OAuth 설정 확인
+    st.write("CLIENT_ID:", CLIENT_ID)
+    st.write("CLIENT_SECRET 설정됨:", bool(CLIENT_SECRET))
+
     if not all([CLIENT_ID, CLIENT_SECRET]):
         st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
-        st.stop()
+        return  # 🚨 st.stop() 대신 return
 
     oauth2 = OAuth2Component(
         CLIENT_ID, CLIENT_SECRET,
         AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT
     )
 
-    # ✅ redirect_uri 통일 (환경 변수와 버튼에서 동일하게 사용)
-    redirect_uri = REDIRECT_URI.strip().rstrip("/")  
-
-    # ✅ 세션 꼬임 방지 초기화
-    if "login_in_progress" not in st.session_state:
-        st.session_state.login_in_progress = False
-
     # 1️⃣ 로그인 안 된 경우
     if 'token' not in st.session_state or st.session_state.token is None:
-        if not st.session_state.login_in_progress:
-            result = oauth2.authorize_button(
-                name="구글 계정으로 로그인",
-                icon="https://www.google.com/favicon.ico",
-                redirect_uri=redirect_uri,
-                scope="openid email profile",
-                key="google_login",
-                use_container_width=True,
-            )
-            st.session_state.login_in_progress = True
-
-            if result and "token" in result:
-                st.session_state.token = result.get("token")
-                st.session_state.login_in_progress = False
-                st.rerun()
+        st.write("👉 아직 로그인 안 됨")
+        result = oauth2.authorize_button(
+            name="구글 계정으로 로그인",
+            icon="https://www.google.com/favicon.ico",
+            redirect_uri="https://study-inside.onrender.com",  # 여기가 redirect_uri mismatch 잘남
+            scope="openid email profile",
+            key="google_login",
+            use_container_width=True,
+        )
+        st.write("authorize_button 결과:", result)  # 🔍 디버깅
+        if result and "token" in result:
+            st.session_state.token = result.get("token")
+            st.rerun()
 
     # 2️⃣ 로그인 된 경우
     else:
+        st.write("👉 로그인 성공. 세션 token 존재.")
         token_details = st.session_state.get("token", {})
-        user_details = {}
+        st.json(token_details)  # 🔍 디버깅 출력
 
+        user_details = {}
         if "id_token" in token_details:
             try:
                 decoded = jwt.decode(
@@ -278,27 +275,24 @@ def main():
             except Exception as e:
                 st.error(f"ID Token 디코딩 실패: {e}")
 
+        st.write("user_details:", user_details)  # 🔍 디버깅 출력
+
         if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
-            st.json(token_details)  # 🔍 디버깅
             if st.button("로그인 페이지로 돌아가기", key="btn_back_to_login"):
                 st.session_state.clear()
                 st.rerun()
-            st.stop()
+            return
 
+        # ✅ 로그인 성공 시 UI 실행
         st.session_state.user_info = user_details
-
-        # ✅ 로그인 성공 UI
         st.success(f"환영합니다, {user_details['name']}님!")
         if user_details.get("picture"):
             st.image(user_details["picture"], width=100)
         st.write("이메일:", user_details["email"])
 
-        # ✅ 사이드바 실행
-        render_sidebar(st.session_state.user_info)
         run_app(supabase, user_details)
-
-
+        
 if __name__ == "__main__":
     initialize_app_state()
     main()
