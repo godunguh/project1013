@@ -346,6 +346,14 @@ def main():
         if user_details.get("picture"): st.image(user_details["picture"], width=100)
         st.write("이메일:", user_details["email"])
         run_app(supabase, user_details)
+        # ✅ Streamlit에서 받은 구글 ID 토큰을 Supabase에도 전달
+        try:
+            auth_res = supabase.auth.sign_in_with_id_token(
+                {"provider": "google", "token": token_details["id_token"]}
+            )
+            st.write("🔑 Supabase Auth 연결 성공")  # 디버깅용
+        except Exception as e:
+            st.error(f"Supabase Auth 연동 실패: {e}")
 
 if __name__ == "__main__":
     initialize_app_state()
