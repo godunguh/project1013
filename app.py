@@ -221,7 +221,6 @@ def run_app(supabase, user_info):
         st.rerun()
 
 
-# --- 메인 앱 로직 ---
 def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
     st.title("📝 2학년 문제 공유 게시판")
@@ -235,25 +234,36 @@ def main():
         AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT
     )
 
+    # ✅ redirect_uri 통일 (환경 변수와 버튼에서 동일하게 사용)
+    redirect_uri = REDIRECT_URI.strip().rstrip("/")  
+
+    # ✅ 세션 꼬임 방지 초기화
+    if "login_in_progress" not in st.session_state:
+        st.session_state.login_in_progress = False
+
     # 1️⃣ 로그인 안 된 경우
     if 'token' not in st.session_state or st.session_state.token is None:
-        result = oauth2.authorize_button(
-            name="구글 계정으로 로그인",
-            icon="https://www.google.com/favicon.ico",
-            redirect_uri="https://study-inside.onrender.com",
-            scope="openid email profile",
-            key="google_login",
-            use_container_width=True,
-        )
-        if result and "token" in result:
-            st.session_state.token = result.get("token")
-            st.rerun()
+        if not st.session_state.login_in_progress:
+            result = oauth2.authorize_button(
+                name="구글 계정으로 로그인",
+                icon="https://www.google.com/favicon.ico",
+                redirect_uri=redirect_uri,
+                scope="openid email profile",
+                key="google_login",
+                use_container_width=True,
+            )
+            st.session_state.login_in_progress = True
+
+            if result and "token" in result:
+                st.session_state.token = result.get("token")
+                st.session_state.login_in_progress = False
+                st.rerun()
 
     # 2️⃣ 로그인 된 경우
     else:
         token_details = st.session_state.get("token", {})
-
         user_details = {}
+
         if "id_token" in token_details:
             try:
                 decoded = jwt.decode(
@@ -278,16 +288,14 @@ def main():
 
         st.session_state.user_info = user_details
 
-        # 로그인 성공 UI
+        # ✅ 로그인 성공 UI
         st.success(f"환영합니다, {user_details['name']}님!")
         if user_details.get("picture"):
             st.image(user_details["picture"], width=100)
         st.write("이메일:", user_details["email"])
 
-        # ✅ 사이드바 호출은 삭제
-        # render_sidebar(st.session_state.user_info, supabase) ❌
-
-        # run_app 실행만 유지
+        # ✅ 사이드바 실행
+        render_sidebar(st.session_state.user_info)
         run_app(supabase, user_details)
 
 
