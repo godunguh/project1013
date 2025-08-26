@@ -366,7 +366,7 @@ def run_app(supabase, user_info):
             st.rerun()
     elif page == "만들기":
         render_creation_form(supabase, user_info)
-    elif page == "대시보드" and user_info['email'] == ADMIN_EMAIL:
+    elif page == "대시보드" and is_admin(supabase, user_info['email']):
         render_dashboard(problem_df, solution_df)
     else:
         st.session_state.page = "목록"
