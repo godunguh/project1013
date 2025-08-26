@@ -190,10 +190,17 @@ def render_sidebar(user_info, supabase):
 
 # --- 앱 실행 로직 ---
 def run_app(supabase, user_info):
+    """로그인 후 실행되는 메인 애플리케이션 로직"""
+    # 1. 데이터 로드
     problem_df = load_data_from_db(supabase, "problems")
     solution_df = load_data_from_db(supabase, "solutions")
-    render_sidebar(user_info, supabase)
+
+    # 2. 사이드바 렌더링 ✅ (여기만 남김)
+    render_sidebar(user_info)
+
+    # 3. 페이지 상태에 따라 다른 UI 렌더링
     page = st.session_state.get("page", "목록")
+
     if page == "목록":
         render_problem_list(problem_df)
     elif page == "상세":
@@ -207,11 +214,12 @@ def run_app(supabase, user_info):
             st.rerun()
     elif page == "만들기":
         render_creation_form(supabase, user_info)
-    elif page == "대시보드" and is_admin(supabase, user_info["email"]):
+    elif page == "대시보드" and user_info['email'] == ADMIN_EMAIL:
         render_dashboard(problem_df, solution_df)
     else:
         st.session_state.page = "목록"
         st.rerun()
+
 
 # --- 메인 앱 로직 ---
 def main():
@@ -227,6 +235,7 @@ def main():
         AUTHORIZE_ENDPOINT, TOKEN_ENDPOINT, TOKEN_ENDPOINT, REVOKE_ENDPOINT
     )
 
+    # 1️⃣ 로그인 안 된 경우
     if 'token' not in st.session_state or st.session_state.token is None:
         result = oauth2.authorize_button(
             name="구글 계정으로 로그인",
@@ -239,8 +248,11 @@ def main():
         if result and "token" in result:
             st.session_state.token = result.get("token")
             st.rerun()
+
+    # 2️⃣ 로그인 된 경우
     else:
         token_details = st.session_state.get("token", {})
+
         user_details = {}
         if "id_token" in token_details:
             try:
@@ -255,20 +267,29 @@ def main():
                 }
             except Exception as e:
                 st.error(f"ID Token 디코딩 실패: {e}")
+
         if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
-            st.json(token_details)
+            st.json(token_details)  # 🔍 디버깅
             if st.button("로그인 페이지로 돌아가기", key="btn_back_to_login"):
                 st.session_state.clear()
                 st.rerun()
             st.stop()
+
         st.session_state.user_info = user_details
+
+        # 로그인 성공 UI
         st.success(f"환영합니다, {user_details['name']}님!")
         if user_details.get("picture"):
             st.image(user_details["picture"], width=100)
         st.write("이메일:", user_details["email"])
-        render_sidebar(st.session_state.user_info, supabase)
+
+        # ✅ 사이드바 호출은 삭제
+        # render_sidebar(st.session_state.user_info, supabase) ❌
+
+        # run_app 실행만 유지
         run_app(supabase, user_details)
+
 
 if __name__ == "__main__":
     initialize_app_state()
