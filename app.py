@@ -186,7 +186,159 @@ def render_sidebar(user_info, supabase):
             st.session_state.clear()
             st.rerun()
 
-# (나머지 render_problem_list, render_problem_detail, render_creation_form, render_dashboard, run_app, main 함수는 동일, 단 ADMIN_EMAIL 대신 is_admin 호출로 변경됨)
+def render_problem_list(problem_df):
+    """문제 목록을 화면에 렌더링"""
+    st.header("📝 문제 목록")
+    if problem_df.empty:
+        st.warning("아직 등록된 문제가 없습니다. 새 문제를 만들어보세요!")
+        return
+
+    # 카테고리 필터링
+    categories = ["전체"] + sorted(problem_df["category"].unique().tolist())
+    selected_category = st.selectbox("카테고리 선택", categories)
+
+    if selected_category == "전체":
+        filtered_df = problem_df
+    else:
+        filtered_df = problem_df[problem_df["category"] == selected_category]
+
+    if filtered_df.empty:
+        st.info(f"'{selected_category}' 카테고리에는 아직 문제가 없습니다.")
+        return
+
+    # 문제 목록 표시
+    for _, problem in filtered_df.iterrows():
+        with st.container(border=True):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.subheader(f"{problem['title']}")
+                st.caption(f"카테고리: {problem['category']} | 작성자: {problem.get('creator_name', '익명')}")
+            with col2:
+                if st.button("문제 풀기", key=f"solve_{problem['id']}", use_container_width=True):
+                    st.session_state.selected_problem_id = problem['id']
+                    st.session_state.page = "상세"
+                    st.rerun()
+
+def render_problem_detail(problem, supabase, user_info):
+    """선택된 문제의 상세 정보와 풀이 화면을 렌더링"""
+    st.header(problem['title'])
+    st.info(f"**카테고리**: {problem['category']} | **작성자**: {problem.get('creator_name', '익명')}")
+    st.markdown("---")
+
+    # 문제 내용
+    st.subheader("문제")
+    if problem.get("question_image_url"):
+        st.image(problem["question_image_url"])
+    st.write(problem['question'])
+
+    # 보기 (객관식/주관식)
+    options = [problem.get(f'option{i}') for i in range(1, 5) if problem.get(f'option{i}')]
+    user_answer = None
+
+    if problem.get('question_type') == '객관식' and options:
+        user_answer = st.radio("정답을 선택하세요:", options, index=None, key=f"answer_{problem['id']}")
+    else: # 주관식 또는 보기 없는 경우
+        user_answer = st.text_input("정답을 입력하세요:", key=f"answer_{problem['id']}")
+
+    if st.button("제출", key=f"submit_{problem['id']}"):
+        if user_answer is not None:
+            is_correct = str(user_answer).strip() == str(problem['answer']).strip()
+            
+            if is_correct:
+                st.success("정답입니다! 🎉")
+                # 풀이 기록 저장
+                solution_data = {
+                    "problem_id": problem["id"],
+                    "user_email": user_info["email"],
+                    "user_name": user_info["name"],
+                    "solved_at": datetime.now().isoformat()
+                }
+                save_solution_to_db(supabase, solution_data)
+            else:
+                st.error("오답입니다. 다시 시도해보세요. 🤔")
+
+            # 해설 표시
+            with st.expander("해설 보기"):
+                if problem.get("explanation_image_url"):
+                    st.image(problem["explanation_image_url"])
+                st.write(problem.get('explanation', '해설이 없습니다.'))
+        else:
+            st.warning("답을 선택하거나 입력해주세요.")
+
+    st.markdown("---")
+    if st.button("목록으로 돌아가기"):
+        st.session_state.page = "목록"
+        st.rerun()
+
+def render_creation_form(supabase, user_info):
+    """새로운 문제를 만드는 폼을 렌더링"""
+    st.header("✍️ 새로운 문제 만들기")
+    with st.form("new_problem_form", clear_on_submit=True):
+        title = st.text_input("제목", placeholder="문제의 핵심을 나타내는 제목")
+        category = st.text_input("카테고리", placeholder="예: 수학, 과학, 역사")
+        question = st.text_area("문제 내용")
+        question_image = st.file_uploader("문제 이미지 (선택 사항)", type=['png', 'jpg', 'jpeg'])
+        
+        question_type = st.radio("문제 유형", ('객관식', '주관식'))
+        
+        options = {}
+        if question_type == '객관식':
+            options['option1'] = st.text_input("보기 1")
+            options['option2'] = st.text_input("보기 2")
+            options['option3'] = st.text_input("보기 3")
+            options['option4'] = st.text_input("보기 4")
+
+        answer = st.text_input("정답")
+        explanation = st.text_area("해설")
+        explanation_image = st.file_uploader("해설 이미지 (선택 사항)", type=['png', 'jpg', 'jpeg'])
+
+        submitted = st.form_submit_button("문제 만들기")
+
+        if submitted:
+            if not all([title, category, question, answer]):
+                st.error("제목, 카테고리, 문제 내용, 정답은 필수 항목입니다.")
+                return
+
+            # 이미지 업로드
+            question_image_url, q_error = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
+            if q_error: st.error(q_error)
+            
+            explanation_image_url, e_error = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, explanation_image)
+            if e_error: st.error(e_error)
+
+            problem_data = {
+                "id": str(uuid.uuid4()),
+                "title": title,
+                "category": category,
+                "question": question,
+                "question_type": question_type,
+                "answer": answer,
+                "explanation": explanation,
+                "creator_name": user_info["name"],
+                "creator_email": user_info["email"],
+                "question_image_url": question_image_url,
+                "explanation_image_url": explanation_image_url,
+                "created_at": datetime.now().isoformat(),
+                **options
+            }
+            save_problem_to_db(supabase, problem_data)
+            st.success("문제가 성공적으로 등록되었습니다!")
+            st.balloons()
+
+def render_dashboard(problem_df, solution_df):
+    """관리자용 대시보드 렌더링"""
+    st.header("📊 관리자 대시보드")
+    st.write("이곳에서 문제 및 풀이 통계를 확인할 수 있습니다.")
+    
+    tab1, tab2 = st.tabs(["문제 관리", "풀이 통계"])
+
+    with tab1:
+        st.subheader("등록된 문제 목록")
+        st.dataframe(problem_df)
+
+    with tab2:
+        st.subheader("사용자 풀이 기록")
+        st.dataframe(solution_df)
 
 # --- 앱 실행 로직 ---
 def run_app(supabase, user_info):
