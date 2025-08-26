@@ -196,7 +196,7 @@ def run_app(supabase, user_info):
     solution_df = load_data_from_db(supabase, "solutions")
 
     # 2. 사이드바 렌더링 ✅ (여기만 남김)
-    render_sidebar(user_info)
+    render_sidebar(user_info, supabase)
 
     # 3. 페이지 상태에 따라 다른 UI 렌더링
     page = st.session_state.get("page", "목록")
