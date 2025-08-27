@@ -326,7 +326,6 @@ def render_creation_form(supabase, user_info):
                 if err2: st.error(err2); return
 
             new_problem = {
-                "id": uuid.uuid4(),
                 "title": title,
                 "category": category,
                 "question": question,
