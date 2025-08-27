@@ -326,7 +326,7 @@ def render_creation_form(supabase, user_info):
                 if err2: st.error(err2); return
 
             new_problem = {
-                "id": str(uuid.uuid4()),
+                "id": uuid.uuid4(),
                 "title": title,
                 "category": category,
                 "question": question,
@@ -397,10 +397,6 @@ def run_app(supabase, user_info):
 def main():
     st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
     st.title("📝 2학년 문제 공유 게시판")
-
-    # 🔍 OAuth 설정 확인
-    st.write("CLIENT_ID:", CLIENT_ID)
-    st.write("CLIENT_SECRET 설정됨:", bool(CLIENT_SECRET))
 
     if not all([CLIENT_ID, CLIENT_SECRET]):
         st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
