@@ -237,7 +237,7 @@ def render_problem_detail(problem, supabase, user_info):
 
     if problem.get('question_type') == '객관식' and options:
         user_answer = st.radio("정답을 선택하세요:", options, index=None, key=f"answer_{problem['id']}")
-    else: # 주관식 또는 보기 없는 경우
+    else:  # 주관식 또는 보기 없는 경우
         user_answer = st.text_input("정답을 입력하세요:", key=f"answer_{problem['id']}")
 
     if st.button("제출", key=f"submit_{problem['id']}"):
@@ -266,10 +266,11 @@ def render_problem_detail(problem, supabase, user_info):
             st.warning("답을 선택하거나 입력해주세요.")
 
     st.markdown("---")
-    if st.button("목록으로 돌아가기"):
+    # 👉 자동 이동 대신, 원하는 경우에만 눌러서 이동
+    if st.button("목록으로 돌아가기", key=f"back_{problem['id']}"):
         st.session_state.page = "목록"
         st.rerun()
-
+        
 def render_creation_form(supabase, user_info):
     st.header("✍️ 새로운 문제 만들기")
     question_type = st.radio("📋 문제 유형", ('객관식', '주관식'))
@@ -421,7 +422,7 @@ def main():
             key="google_login",
             use_container_width=True,
         )
-        st.write("authorize_button 결과:", result)  # 🔍 디버깅
+
         if result and "token" in result:
             st.session_state.token = result.get("token")
             st.rerun()
@@ -430,7 +431,7 @@ def main():
     else:
         st.write("👉 로그인 성공. 세션 token 존재.")
         token_details = st.session_state.get("token", {})
-        st.json(token_details)  # 🔍 디버깅 출력
+
 
         user_details = {}
         if "id_token" in token_details:
@@ -447,7 +448,7 @@ def main():
             except Exception as e:
                 st.error(f"ID Token 디코딩 실패: {e}")
 
-        st.write("user_details:", user_details)  # 🔍 디버깅 출력
+
 
         if not user_details:
             st.error("사용자 정보를 가져오는 데 실패했습니다. 다시 로그인해주세요.")
