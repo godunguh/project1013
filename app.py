@@ -362,6 +362,9 @@ def render_dashboard(problem_df, solution_df):
 
 # --- 앱 실행 로직 ---
 def run_app(supabase, user_info):
+
+    st.write(f"사용자 이메일: {user_info['email']}")
+    st.write(f"관리자 여부: {is_admin(supabase, user_info['email'])}")
     """로그인 후 실행되는 메인 애플리케이션 로직"""
     # 1. 데이터 로드
     problem_df = load_data_from_db(supabase, "problems")
