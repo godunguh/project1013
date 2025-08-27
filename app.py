@@ -282,9 +282,9 @@ def render_creation_form(supabase, user_info):
             index=None
         )
         question = st.text_area("❓ 문제 내용")
-        question_image = st.file_uploader("🖼️ 문제 이미지 추가", type=['png', 'jpg', 'jpeg'])
+        question_image = st.file_uploader("🖼️ 문제 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'])
         explanation = st.text_area("📝 문제 풀이/해설")
-        explanation_image = st.file_uploader("🖼️ 해설 이미지 추가", type=['png', 'jpg', 'jpeg'])
+        explanation_image = st.file_uploader("🖼️ 해설 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'])
 
         options = ["", "", "", ""]
         answer_payload = None
@@ -313,10 +313,16 @@ def render_creation_form(supabase, user_info):
             return
 
         with st.spinner('처리 중...'):
-            q_img_url, err1 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
-            if err1: st.error(err1); return
-            e_img_url, err2 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, explanation_image)
-            if err2: st.error(err2); return
+            # 파일이 있을 때만 업로드 시도
+            q_img_url, err1 = (None, None)
+            if question_image:
+                q_img_url, err1 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
+                if err1: st.error(err1); return
+
+            e_img_url, err2 = (None, None)
+            if explanation_image:
+                e_img_url, err2 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, explanation_image)
+                if err2: st.error(err2); return
 
             new_problem = {
                 "id": str(uuid.uuid4()),
