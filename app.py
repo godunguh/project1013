@@ -26,7 +26,7 @@ PROBLEM_HEADERS = [
     "answer", "creator_name", "creator_email", "explanation", "question_image_id", 
     "explanation_image_id", "question_type", "created_at"
 ]
-SOLUTION_HEADERS = ["problem_id", "user_email", "user_name", "created_at"]
+SOLUTION_HEADERS = ["problem_id", "user_email", "user_name", "solved_at"]
 DRIVE_FOLDER_NAME = "MyQuizApp Images"
 
 # OAuth2 설정 (secrets.toml 파일 사용)
@@ -251,7 +251,7 @@ def render_problem_detail(problem, supabase, user_info):
                     "problem_id": problem["id"],
                     "user_email": user_info["email"],
                     "user_name": user_info["name"],
-                    "created_at": datetime.now().isoformat()
+                    "solved_at": datetime.now().isoformat()
                 }
                 save_solution_to_db(supabase, solution_data)
             else:
