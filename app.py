@@ -271,60 +271,74 @@ def render_problem_detail(problem, supabase, user_info):
         st.rerun()
 
 def render_creation_form(supabase, user_info):
-    """새로운 문제를 만드는 폼을 렌더링"""
     st.header("✍️ 새로운 문제 만들기")
-    with st.form("new_problem_form", clear_on_submit=True):
-        title = st.text_input("제목", placeholder="문제의 핵심을 나타내는 제목")
-        category = st.text_input("카테고리", placeholder="예: 수학, 과학, 역사")
-        question = st.text_area("문제 내용")
-        question_image = st.file_uploader("문제 이미지 (선택 사항)", type=['png', 'jpg', 'jpeg'])
-        
-        question_type = st.radio("문제 유형", ('객관식', '주관식'))
-        
-        options = {}
+    question_type = st.radio("📋 문제 유형", ('객관식', '주관식'))
+
+    with st.form("creation_form"):
+        title = st.text_input("📝 문제 제목")
+        category = st.selectbox(
+            "📚 분류", 
+            ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"],
+            index=None
+        )
+        question = st.text_area("❓ 문제 내용")
+        question_image = st.file_uploader("🖼️ 문제 이미지 추가", type=['png', 'jpg', 'jpeg'])
+        explanation = st.text_area("📝 문제 풀이/해설")
+        explanation_image = st.file_uploader("🖼️ 해설 이미지 추가", type=['png', 'jpg', 'jpeg'])
+
+        options = ["", "", "", ""]
+        answer_payload = None
+
         if question_type == '객관식':
-            options['option1'] = st.text_input("보기 1")
-            options['option2'] = st.text_input("보기 2")
-            options['option3'] = st.text_input("보기 3")
-            options['option4'] = st.text_input("보기 4")
+            st.subheader("📝 선택지 입력")
+            options = [st.text_input(f"선택지 {i+1}") for i in range(4)]
+            answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=None)
+        else:
+            answer_payload = st.text_input("✅ 정답 입력")
 
-        answer = st.text_input("정답")
-        explanation = st.text_area("해설")
-        explanation_image = st.file_uploader("해설 이미지 (선택 사항)", type=['png', 'jpg', 'jpeg'])
+        submitted = st.form_submit_button("문제 제출하기", type="primary")
 
-        submitted = st.form_submit_button("문제 만들기")
+    if submitted:
+        # 정답 매핑
+        final_answer = ""
+        if question_type == '객관식':
+            if answer_payload:
+                selected_idx = int(answer_payload.split(" ")[1]) - 1
+                final_answer = options[selected_idx]
+        else:
+            final_answer = answer_payload
 
-        if submitted:
-            if not all([title, category, question, answer]):
-                st.error("제목, 카테고리, 문제 내용, 정답은 필수 항목입니다.")
-                return
+        if not all([title, category, question, final_answer]):
+            st.warning("이미지를 제외한 모든 필수 필드를 채워주세요!")
+            return
 
-            # 이미지 업로드
-            question_image_url, q_error = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
-            if q_error: st.error(q_error)
-            
-            explanation_image_url, e_error = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, explanation_image)
-            if e_error: st.error(e_error)
+        with st.spinner('처리 중...'):
+            q_img_url, err1 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
+            if err1: st.error(err1); return
+            e_img_url, err2 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, explanation_image)
+            if err2: st.error(err2); return
 
-            problem_data = {
+            new_problem = {
                 "id": str(uuid.uuid4()),
                 "title": title,
                 "category": category,
                 "question": question,
-                "question_type": question_type,
-                "answer": answer,
-                "explanation": explanation,
+                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                "answer": final_answer,
                 "creator_name": user_info["name"],
                 "creator_email": user_info["email"],
-                "question_image_url": question_image_url,
-                "explanation_image_url": explanation_image_url,
-                "created_at": datetime.now().isoformat(),
-                **options
+                "explanation": explanation,
+                "question_type": question_type,
+                "question_image_url": q_img_url,
+                "explanation_image_url": e_img_url,
+                "created_at": datetime.now().isoformat()
             }
-            save_problem_to_db(supabase, problem_data)
-            st.success("문제가 성공적으로 등록되었습니다!")
+            save_problem_to_db(supabase, new_problem)
+            st.success("🎉 문제가 성공적으로 만들어졌습니다!")
             st.balloons()
-
+            st.session_state.page = "목록"
+            st.rerun()
+            
 def render_dashboard(problem_df, solution_df):
     """관리자용 대시보드 렌더링"""
     st.header("📊 관리자 대시보드")
