@@ -179,6 +179,27 @@ def update_problem_in_db(supabase: Client, problem_id: int, new_data: dict, old_
     except Exception as e:
         st.error(f"문제 업데이트 오류: {e}")
 
+# --- 한글 초성 정렬 함수 ---
+def korean_sort_key(s):
+    if not isinstance(s, str):
+        return (4, s) # 문자열이 아닌 경우 맨 뒤로
+
+    CHOSUNG_LIST = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+    
+    result = []
+    for char in s.lower(): # 영문 대소문자 구분 없이
+        if '가' <= char <= '힣':
+            char_code = ord(char) - ord('가')
+            chosung_index = char_code // (21 * 28)
+            result.append((2, CHOSUNG_LIST[chosung_index], char)) # 한글
+        elif 'a' <= char <= 'z':
+            result.append((1, char)) # 영어
+        elif '0' <= char <= '9':
+            result.append((0, char)) # 숫자
+        else:
+            result.append((3, char)) # 기타
+    return result
+
 # --- UI 렌더링 함수 ---
 def render_sidebar(user_info, supabase):
     with st.sidebar:
@@ -209,6 +230,10 @@ def render_problem_list(problem_df):
     if problem_df.empty:
         st.warning("아직 등록된 문제가 없습니다. 새 문제를 만들어보세요!")
         return
+
+    # 제목을 기준으로 초성 정렬 (숫자 > 영어 > 한글)
+    problem_df['sort_key'] = problem_df['title'].apply(korean_sort_key)
+    problem_df = problem_df.sort_values(by='sort_key').drop(columns=['sort_key']).reset_index(drop=True)
 
     # 카테고리 필터링
     categories = ["전체"] + sorted(problem_df["category"].unique().tolist())
