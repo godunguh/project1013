@@ -265,6 +265,13 @@ def render_problem_detail(problem, supabase, user_info):
         else:
             st.warning("답을 선택하거나 입력해주세요.")
 
+    if user_info['email'] == problem.get('creator_email') or user_info['email'] == ADMIN_EMAIL:
+        st.divider()
+        st.subheader("🔒 문제 관리")
+        if st.button("🗑️ 문제 삭제하기", type="secondary"):
+            delete_problem(sheets['problems'], drive_service, problem)
+            st.success("문제가 삭제되었습니다."); st.session_state.page = "목록"; st.rerun()
+
     st.markdown("---")
     # 👉 자동 이동 대신, 원하는 경우에만 눌러서 이동
     if st.button("목록으로 돌아가기", key=f"back_{problem['id']}"):
@@ -393,8 +400,6 @@ def run_app(supabase, user_info):
     else:
         st.session_state.page = "목록"
         st.rerun()
-    st.write(f"사용자 이메일: {user_info['email']}")
-    st.write(f"관리자 여부: {is_admin(supabase, user_info['email'])}")
 
 
 def main():
@@ -428,7 +433,6 @@ def main():
 
     # 2️⃣ 로그인 된 경우
     else:
-        st.write("👉 로그인 성공. 세션 token 존재.")
         token_details = st.session_state.get("token", {})
 
 
