@@ -265,7 +265,8 @@ def render_problem_detail(problem, supabase, user_info):
         else:
             st.warning("답을 선택하거나 입력해주세요.")
 
-    if user_info['email'] == problem.get('creator_email') or user_info['email'] == ADMIN_EMAIL:
+    #문제 수정
+    if user_info['email'] == problem.get('creator_email') or is_admin(supabase, user_info["email"]):
         st.divider()
         st.subheader("🔒 문제 관리")
         if st.button("🗑️ 문제 삭제하기", type="secondary"):
