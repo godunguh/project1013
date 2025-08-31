@@ -506,9 +506,8 @@ def run_app(supabase, user_info):
     elif page == "상세":
         problem_id = st.session_state.get("selected_problem_id")
         if problem_id and not problem_df.empty:
-            # id가 int64일 수 있으므로 형 변환 후 비교
-            problem_df['id'] = problem_df['id'].astype(int)
-            selected_problem_series = problem_df[problem_df['id'] == int(problem_id)]
+            # ID가 문자열(UUID)이므로 문자열로 직접 비교합니다.
+            selected_problem_series = problem_df[problem_df['id'] == problem_id]
             if not selected_problem_series.empty:
                 selected_problem = selected_problem_series.iloc[0].to_dict()
                 render_problem_detail(selected_problem, supabase, user_info)
