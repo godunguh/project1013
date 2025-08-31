@@ -73,6 +73,8 @@ def initialize_app_state():
         st.session_state.page = "목록"
     if 'selected_problem_id' not in st.session_state: 
         st.session_state.selected_problem_id = None
+    if 'problem_to_edit' not in st.session_state:
+        st.session_state.problem_to_edit = None
     if 'token' not in st.session_state: 
         st.session_state.token = None
     if 'user_info' not in st.session_state: 
@@ -161,6 +163,21 @@ def delete_problem_from_db(supabase: Client, problem: dict):
         st.cache_data.clear()
     except Exception as e:
         st.error(f"문제 삭제 오류: {e}")
+
+def update_problem_in_db(supabase: Client, problem_id: int, new_data: dict, old_problem: dict):
+    """Supabase의 problems 테이블에서 특정 문제를 업데이트합니다."""
+    try:
+        # 새 이미지 파일이 있으면 기존 이미지 삭제 후 새 이미지 업로드
+        if new_data.get("question_image_url") != old_problem.get("question_image_url"):
+            delete_image_from_storage(supabase, SUPABASE_BUCKET_NAME, old_problem.get("question_image_url"))
+        
+        if new_data.get("explanation_image_url") != old_problem.get("explanation_image_url"):
+            delete_image_from_storage(supabase, SUPABASE_BUCKET_NAME, old_problem.get("explanation_image_url"))
+
+        supabase.table("problems").update(new_data).eq("id", problem_id).execute()
+        st.cache_data.clear()
+    except Exception as e:
+        st.error(f"문제 업데이트 오류: {e}")
 
 # --- UI 렌더링 함수 ---
 def render_sidebar(user_info, supabase):
@@ -265,20 +282,123 @@ def render_problem_detail(problem, supabase, user_info):
         else:
             st.warning("답을 선택하거나 입력해주세요.")
 
-    #문제 수정
+    # 문제 관리 (작성자 및 관리자)
     if user_info['email'] == problem.get('creator_email') or is_admin(supabase, user_info["email"]):
         st.divider()
         st.subheader("🔒 문제 관리")
-        if st.button("🗑️ 문제 삭제하기", type="secondary"):
-            delete_problem(sheets['problems'], drive_service, problem)
-            st.success("문제가 삭제되었습니다."); st.session_state.page = "목록"; st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✏️ 문제 수정하기", use_container_width=True):
+                st.session_state.problem_to_edit = problem
+                st.session_state.page = "수정"
+                st.rerun()
+        with col2:
+            if st.button("🗑️ 문제 삭제하기", type="secondary", use_container_width=True):
+                delete_problem_from_db(supabase, problem)
+                st.success("문제가 삭제되었습니다. 목록으로 돌아갑니다.")
+                st.session_state.page = "목록"
+                st.rerun()
 
     st.markdown("---")
-    # 👉 자동 이동 대신, 원하는 경우에만 눌러서 이동
     if st.button("목록으로 돌아가기", key=f"back_{problem['id']}"):
         st.session_state.page = "목록"
         st.rerun()
+
+def render_edit_form(supabase: Client, problem: dict):
+    """문제 수정을 위한 폼을 렌더링합니다."""
+    st.header("✍️ 문제 수정하기")
+
+    # 카테고리 목록
+    categories = ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"]
+    try:
+        default_category_index = categories.index(problem.get("category"))
+    except ValueError:
+        default_category_index = None
+
+    with st.form("edit_form"):
+        title = st.text_input("📝 문제 제목", value=problem.get("title", ""))
+        category = st.selectbox(
+            "📚 분류",
+            categories,
+            index=default_category_index
+        )
+        question = st.text_area("❓ 문제 내용", value=problem.get("question", ""))
         
+        st.write("🖼️ 현재 문제 이미지")
+        if problem.get("question_image_url"):
+            st.image(problem["question_image_url"])
+        else:
+            st.caption("이미지 없음")
+        new_question_image = st.file_uploader("🔄️ 새로운 문제 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'])
+
+        explanation = st.text_area("📝 문제 풀이/해설", value=problem.get("explanation", ""))
+
+        st.write("🖼️ 현재 해설 이미지")
+        if problem.get("explanation_image_url"):
+            st.image(problem["explanation_image_url"])
+        else:
+            st.caption("이미지 없음")
+        new_explanation_image = st.file_uploader("🔄️ 새로운 해설 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'])
+
+        question_type = problem.get("question_type", "객관식")
+        options = [problem.get(f"option{i+1}", "") for i in range(4)]
+        answer_payload = None
+
+        if question_type == '객관식':
+            st.subheader("📝 선택지 수정")
+            options = [st.text_input(f"선택지 {i+1}", value=opt) for i, opt in enumerate(options)]
+            
+            try:
+                current_answer_index = options.index(problem.get("answer")) if problem.get("answer") in options else None
+            except ValueError:
+                current_answer_index = None
+            
+            answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=current_answer_index)
+        else: # 주관식
+            answer_payload = st.text_input("✅ 정답 입력", value=problem.get("answer", ""))
+
+        submitted = st.form_submit_button("문제 수정 완료", type="primary")
+
+    if submitted:
+        final_answer = ""
+        if question_type == '객관식':
+            if answer_payload:
+                selected_idx = int(answer_payload.split(" ")[1]) - 1
+                final_answer = options[selected_idx]
+        else:
+            final_answer = answer_payload
+
+        if not all([title, category, question, final_answer]):
+            st.warning("필수 필드를 모두 채워주세요!")
+            return
+
+        with st.spinner('업데이트 중...'):
+            updated_data = {
+                "title": title,
+                "category": category,
+                "question": question,
+                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                "answer": final_answer,
+                "explanation": explanation,
+            }
+
+            q_img_url = problem.get("question_image_url")
+            if new_question_image:
+                q_img_url, err1 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, new_question_image)
+                if err1: st.error(err1); return
+            updated_data["question_image_url"] = q_img_url
+
+            e_img_url = problem.get("explanation_image_url")
+            if new_explanation_image:
+                e_img_url, err2 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, new_explanation_image)
+                if err2: st.error(err2); return
+            updated_data["explanation_image_url"] = e_img_url
+            
+            update_problem_in_db(supabase, problem["id"], updated_data, problem)
+            st.success("🎉 문제가 성공적으로 수정되었습니다!")
+            st.session_state.page = "상세"
+            st.rerun()
+
 def render_creation_form(supabase, user_info):
     st.header("✍️ 새로운 문제 만들기")
     question_type = st.radio("📋 문제 유형", ('객관식', '주관식'))
@@ -370,14 +490,12 @@ def render_dashboard(problem_df, solution_df):
 
 # --- 앱 실행 로직 ---
 def run_app(supabase, user_info):
-
-
     """로그인 후 실행되는 메인 애플리케이션 로직"""
     # 1. 데이터 로드
     problem_df = load_data_from_db(supabase, "problems")
     solution_df = load_data_from_db(supabase, "solutions")
 
-    # 2. 사이드바 렌더링 ✅ (여기만 남김)
+    # 2. 사이드바 렌더링
     render_sidebar(user_info, supabase)
 
     # 3. 페이지 상태에 따라 다른 UI 렌더링
@@ -388,14 +506,30 @@ def run_app(supabase, user_info):
     elif page == "상세":
         problem_id = st.session_state.get("selected_problem_id")
         if problem_id and not problem_df.empty:
-            selected_problem = problem_df[problem_df['id'] == problem_id].iloc[0].to_dict()
-            render_problem_detail(selected_problem, supabase, user_info)
+            # id가 int64일 수 있으므로 형 변환 후 비교
+            problem_df['id'] = problem_df['id'].astype(int)
+            selected_problem_series = problem_df[problem_df['id'] == int(problem_id)]
+            if not selected_problem_series.empty:
+                selected_problem = selected_problem_series.iloc[0].to_dict()
+                render_problem_detail(selected_problem, supabase, user_info)
+            else:
+                st.warning("문제를 찾을 수 없습니다. 목록으로 돌아갑니다.")
+                st.session_state.page = "목록"
+                st.rerun()
         else:
             st.warning("문제를 찾을 수 없거나 선택되지 않았습니다. 목록으로 돌아갑니다.")
             st.session_state.page = "목록"
             st.rerun()
     elif page == "만들기":
         render_creation_form(supabase, user_info)
+    elif page == "수정":
+        problem_to_edit = st.session_state.get("problem_to_edit")
+        if problem_to_edit:
+            render_edit_form(supabase, problem_to_edit)
+        else:
+            st.warning("수정할 문제가 선택되지 않았습니다. 목록으로 돌아갑니다.")
+            st.session_state.page = "목록"
+            st.rerun()
     elif page == "대시보드" and is_admin(supabase, user_info['email']):
         render_dashboard(problem_df, solution_df)
     else:
