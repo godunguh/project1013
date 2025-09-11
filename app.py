@@ -20,9 +20,24 @@ from supabase import create_client, Client
 # --- 상수 및 기본 설정 ---
 SUPABASE_BUCKET_NAME = "images"
 
+# --- 과목 및 단원 데이터 ---
+# 이 사전을 수정하여 과목과 단원을 관리하세요.
+CHAPTERS_BY_CATEGORY = {
+    "수학2": ["함수의 극한과 연속", "미분", "적분", "기타"],
+    "확률과 통계": ["경우의 수", "확률", "통계", "기타"],
+    "독서": ["르르쌤", "재경쌤", "기타"],
+    "영어": ["교과서 본문", "모의고사", "기타"],
+    "물리학1": ["역학과 에너지", "물질과 전자기장", "파동과 정보 통신", "기타"],
+    "화학1": ["화학의 첫걸음", "원자의 세계", "화학 결합과 분자의 세계", "기타"],
+    "생명과학1": ["사람의 물질대사", "항상성과 몸의 조절", "유전", "생태계", "기타"],
+    "지구과학1": ["고체 지구의 변화", "대기와 해양의 변화", "우주의 구성과 변화", "기타"],
+    "사회문화": ["기타"],
+    "기타": ["일반선택", "진로선택", "기타", "공부 외"]
+}
+
 # Google Sheets 헤더 정의
 PROBLEM_HEADERS = [
-    "id", "title", "category", "question", "option1", "option2", "option3", "option4", 
+    "id", "title", "category", "chapter", "difficulty", "question", "option1", "option2", "option3", "option4", 
     "answer", "creator_name", "creator_email", "explanation", "question_image_id", 
     "explanation_image_id", "question_type", "created_at"
 ]
@@ -253,8 +268,9 @@ def render_problem_list(problem_df):
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.subheader(f"{problem['title']}")
-                st.caption(f"카테고리: {problem['category']} | 작성자: {problem.get('creator_name', '익명')}")
+                chapter_text = problem.get('chapter', '단원 미지정')
+                difficulty_text = problem.get('difficulty', '난이도 미지정')
+                st.subheader(f"{problem['title']} | {chapter_text}({difficulty_text})")
             with col2:
                 if st.button("문제 풀기", key=f"solve_{problem['id']}", use_container_width=True):
                     st.session_state.selected_problem_id = problem['id']
@@ -264,7 +280,11 @@ def render_problem_list(problem_df):
 def render_problem_detail(problem, supabase, user_info):
     """선택된 문제의 상세 정보와 풀이 화면을 렌더링"""
     st.header(problem['title'])
-    st.info(f"**카테고리**: {problem['category']} | **작성자**: {problem.get('creator_name', '익명')}")
+    
+    chapter_text = problem.get('chapter', '미지정')
+    difficulty_text = problem.get('difficulty', '미지정')
+    st.info(f"**분류**: {problem.get('category', '미지정')} > {chapter_text} | **난이도**: {difficulty_text} | **작성자**: {problem.get('creator_name', '익명')}")
+    
     st.markdown("---")
 
     # 문제 내용
@@ -333,20 +353,34 @@ def render_edit_form(supabase: Client, problem: dict):
     """문제 수정을 위한 폼을 렌더링합니다."""
     st.header("✍️ 문제 수정하기")
 
-    # 카테고리 목록
-    categories = ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"]
-    try:
-        default_category_index = categories.index(problem.get("category"))
-    except ValueError:
-        default_category_index = None
-
     with st.form("edit_form"):
         title = st.text_input("📝 문제 제목", value=problem.get("title", ""))
-        category = st.selectbox(
-            "📚 분류",
-            categories,
-            index=default_category_index
-        )
+
+        # --- 카테고리, 단원, 난이도 ---
+        categories = list(CHAPTERS_BY_CATEGORY.keys())
+        try:
+            default_category_index = categories.index(problem.get("category"))
+        except (ValueError, TypeError):
+            default_category_index = None
+        category = st.selectbox("📚 분류", categories, index=default_category_index)
+
+        chapter = None
+        if category:
+            chapters = CHAPTERS_BY_CATEGORY[category]
+            try:
+                default_chapter_index = chapters.index(problem.get("chapter"))
+            except (ValueError, TypeError):
+                default_chapter_index = None
+            chapter = st.selectbox("📖 단원", chapters, index=default_chapter_index)
+
+        difficulties = ["하", "중", "상"]
+        try:
+            default_difficulty_index = difficulties.index(problem.get("difficulty"))
+        except (ValueError, TypeError):
+            default_difficulty_index = None
+        difficulty = st.selectbox("📊 난이도", difficulties, index=default_difficulty_index)
+        # ---
+
         question = st.text_area("❓ 문제 내용", value=problem.get("question", ""))
         
         st.write("🖼️ 현재 문제 이미지")
@@ -393,14 +427,16 @@ def render_edit_form(supabase: Client, problem: dict):
         else:
             final_answer = answer_payload
 
-        if not all([title, category, question, final_answer]):
-            st.warning("필수 필드를 모두 채워주세요!")
+        if not all([title, category, chapter, difficulty, question, final_answer]):
+            st.warning("제목, 분류, 단원, 난이도, 문제 내용, 정답은 필수 항목입니다.")
             return
 
         with st.spinner('업데이트 중...'):
             updated_data = {
                 "title": title,
                 "category": category,
+                "chapter": chapter,
+                "difficulty": difficulty,
                 "question": question,
                 "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
                 "answer": final_answer,
@@ -430,11 +466,17 @@ def render_creation_form(supabase, user_info):
 
     with st.form("creation_form"):
         title = st.text_input("📝 문제 제목")
-        category = st.selectbox(
-            "📚 분류", 
-            ["수학2", "확률과 통계", "독서", "영어", "물리학1", "화학1", "생명과학1", "지구과학1", "사회문화", "윤리와사상", "기타"],
-            index=None
-        )
+        
+        categories = list(CHAPTERS_BY_CATEGORY.keys())
+        category = st.selectbox("📚 분류", categories, index=None, placeholder="과목을 선택하세요.")
+        
+        chapter = None
+        if category:
+            chapters = CHAPTERS_BY_CATEGORY[category]
+            chapter = st.selectbox("📖 단원", chapters, index=None, placeholder="단원을 선택하세요.")
+
+        difficulty = st.selectbox("📊 난이도", ["하", "중", "상"], index=None, placeholder="난이도를 선택하세요.")
+
         question = st.text_area("❓ 문제 내용")
         question_image = st.file_uploader("🖼️ 문제 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'])
         explanation = st.text_area("📝 문제 풀이/해설")
@@ -462,8 +504,8 @@ def render_creation_form(supabase, user_info):
         else:
             final_answer = answer_payload
 
-        if not all([title, category, question, final_answer]):
-            st.warning("이미지를 제외한 모든 필수 필드를 채워주세요!")
+        if not all([title, category, chapter, difficulty, question, final_answer]):
+            st.warning("제목, 분류, 단원, 난이도, 문제 내용, 정답은 필수 항목입니다.")
             return
 
         with st.spinner('처리 중...'):
@@ -481,6 +523,8 @@ def render_creation_form(supabase, user_info):
             new_problem = {
                 "title": title,
                 "category": category,
+                "chapter": chapter,
+                "difficulty": difficulty,
                 "question": question,
                 "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
                 "answer": final_answer,
