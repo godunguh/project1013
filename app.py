@@ -271,6 +271,7 @@ def render_problem_list(problem_df):
                 chapter_text = problem.get('chapter', '단원 미지정')
                 difficulty_text = problem.get('difficulty', '난이도 미지정')
                 st.subheader(f"{problem['title']} | {chapter_text}({difficulty_text})")
+                st.caption(f"분류: {problem.get('category', '미지정')} | 작성자: {problem.get('creator_name', '익명')}")
             with col2:
                 if st.button("문제 풀기", key=f"solve_{problem['id']}", use_container_width=True):
                     st.session_state.selected_problem_id = problem['id']
