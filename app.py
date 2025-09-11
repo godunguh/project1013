@@ -354,7 +354,7 @@ def render_edit_form(supabase: Client, problem: dict):
     st.header("✍️ 문제 수정하기")
 
     # 위젯 키의 유일성을 보장하기 위해 problem id를 사용
-    key_prefix = f"edit_{problem['id']}_
+    key_prefix = f"edit_{problem['id']}_"""
 
     # st.form을 사용하지 않고 각 위젯을 직접 렌더링
     title = st.text_input("📝 문제 제목", value=problem.get("title", ""), key=f"{key_prefix}title")
