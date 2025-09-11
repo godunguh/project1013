@@ -353,72 +353,68 @@ def render_edit_form(supabase: Client, problem: dict):
     """문제 수정을 위한 폼을 렌더링합니다."""
     st.header("✍️ 문제 수정하기")
 
-    with st.form("edit_form"):
-        title = st.text_input("📝 문제 제목", value=problem.get("title", ""))
+    # 위젯 키의 유일성을 보장하기 위해 problem id를 사용
+    key_prefix = f"edit_{problem['id']}_
 
-        # --- 카테고리, 단원, 난이도 ---
-        categories = list(CHAPTERS_BY_CATEGORY.keys())
+    # st.form을 사용하지 않고 각 위젯을 직접 렌더링
+    title = st.text_input("📝 문제 제목", value=problem.get("title", ""), key=f"{key_prefix}title")
+
+    # --- 카테고리, 단원, 난이도 ---
+    categories = list(CHAPTERS_BY_CATEGORY.keys())
+    try:
+        default_category_index = categories.index(problem.get("category"))
+    except (ValueError, TypeError):
+        default_category_index = None
+    category = st.selectbox("📚 분류", categories, index=default_category_index, key=f"{key_prefix}category")
+
+    chapter = None
+    if category:
+        chapters = CHAPTERS_BY_CATEGORY[category]
         try:
-            default_category_index = categories.index(problem.get("category"))
+            # 사용자가 카테고리를 변경했을 경우, 이전 단원이 새 카테고리에 없을 수 있으므로 예외 처리
+            default_chapter_index = chapters.index(problem.get("chapter")) if problem.get("chapter") in chapters else None
         except (ValueError, TypeError):
-            default_category_index = None
-        category = st.selectbox("📚 분류", categories, index=default_category_index)
+            default_chapter_index = None
+        chapter = st.selectbox("📖 단원", chapters, index=default_chapter_index, key=f"{key_prefix}chapter")
 
-        chapter = None
-        if category:
-            chapters = CHAPTERS_BY_CATEGORY[category]
-            try:
-                default_chapter_index = chapters.index(problem.get("chapter"))
-            except (ValueError, TypeError):
-                default_chapter_index = None
-            chapter = st.selectbox("📖 단원", chapters, index=default_chapter_index)
+    difficulties = ["하", "중", "상"]
+    try:
+        default_difficulty_index = difficulties.index(problem.get("difficulty"))
+    except (ValueError, TypeError):
+        default_difficulty_index = None
+    difficulty = st.selectbox("📊 난이도", difficulties, index=default_difficulty_index, key=f"{key_prefix}difficulty")
+    # ---
 
-        difficulties = ["하", "중", "상"]
-        try:
-            default_difficulty_index = difficulties.index(problem.get("difficulty"))
-        except (ValueError, TypeError):
-            default_difficulty_index = None
-        difficulty = st.selectbox("📊 난이도", difficulties, index=default_difficulty_index)
-        # ---
+    question = st.text_area("❓ 문제 내용", value=problem.get("question", ""), key=f"{key_prefix}question")
+    
+    st.write("🖼️ 현재 문제 이미지")
+    if problem.get("question_image_url"):
+        st.image(problem["question_image_url"])
+    new_question_image = st.file_uploader("🔄️ 새로운 문제 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'], key=f"{key_prefix}q_image")
 
-        question = st.text_area("❓ 문제 내용", value=problem.get("question", ""))
+    explanation = st.text_area("📝 문제 풀이/해설", value=problem.get("explanation", ""), key=f"{key_prefix}explanation")
+
+    st.write("🖼️ 현재 해설 이미지")
+    if problem.get("explanation_image_url"):
+        st.image(problem["explanation_image_url"])
+    new_explanation_image = st.file_uploader("🔄️ 새로운 해설 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'], key=f"{key_prefix}e_image")
+
+    question_type = problem.get("question_type", "객관식")
+    options = [problem.get(f"option{i+1}", "") for i in range(4)]
+    
+    if question_type == '객관식':
+        st.subheader("📝 선택지 수정")
+        options = [st.text_input(f"선택지 {i+1}", value=opt, key=f"{key_prefix}opt{i}") for i, opt in enumerate(options)]
         
-        st.write("🖼️ 현재 문제 이미지")
-        if problem.get("question_image_url"):
-            st.image(problem["question_image_url"])
-        else:
-            st.caption("이미지 없음")
-        new_question_image = st.file_uploader("🔄️ 새로운 문제 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'])
+        try:
+            current_answer_index = options.index(problem.get("answer")) if problem.get("answer") in options else None
+        except ValueError:
+            current_answer_index = None
+        answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=current_answer_index, key=f"{key_prefix}answer_radio")
+    else: # 주관식
+        answer_payload = st.text_input("✅ 정답 입력", value=problem.get("answer", ""), key=f"{key_prefix}answer_text")
 
-        explanation = st.text_area("📝 문제 풀이/해설", value=problem.get("explanation", ""))
-
-        st.write("🖼️ 현재 해설 이미지")
-        if problem.get("explanation_image_url"):
-            st.image(problem["explanation_image_url"])
-        else:
-            st.caption("이미지 없음")
-        new_explanation_image = st.file_uploader("🔄️ 새로운 해설 이미지로 교체 (선택)", type=['png', 'jpg', 'jpeg'])
-
-        question_type = problem.get("question_type", "객관식")
-        options = [problem.get(f"option{i+1}", "") for i in range(4)]
-        answer_payload = None
-
-        if question_type == '객관식':
-            st.subheader("📝 선택지 수정")
-            options = [st.text_input(f"선택지 {i+1}", value=opt) for i, opt in enumerate(options)]
-            
-            try:
-                current_answer_index = options.index(problem.get("answer")) if problem.get("answer") in options else None
-            except ValueError:
-                current_answer_index = None
-            
-            answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=current_answer_index)
-        else: # 주관식
-            answer_payload = st.text_input("✅ 정답 입력", value=problem.get("answer", ""))
-
-        submitted = st.form_submit_button("문제 수정 완료", type="primary")
-
-    if submitted:
+    if st.button("문제 수정 완료", type="primary", key=f"{key_prefix}submit"):
         final_answer = ""
         if question_type == '객관식':
             if answer_payload:
@@ -433,14 +429,9 @@ def render_edit_form(supabase: Client, problem: dict):
 
         with st.spinner('업데이트 중...'):
             updated_data = {
-                "title": title,
-                "category": category,
-                "chapter": chapter,
-                "difficulty": difficulty,
-                "question": question,
-                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                "answer": final_answer,
-                "explanation": explanation,
+                "title": title, "category": category, "chapter": chapter, "difficulty": difficulty,
+                "question": question, "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                "answer": final_answer, "explanation": explanation,
             }
 
             q_img_url = problem.get("question_image_url")
@@ -462,40 +453,36 @@ def render_edit_form(supabase: Client, problem: dict):
 
 def render_creation_form(supabase, user_info):
     st.header("✍️ 새로운 문제 만들기")
-    question_type = st.radio("📋 문제 유형", ('객관식', '주관식'))
+    question_type = st.radio("📋 문제 유형", ('객관식', '주관식'), key="create_q_type")
 
-    with st.form("creation_form"):
-        title = st.text_input("📝 문제 제목")
-        
-        categories = list(CHAPTERS_BY_CATEGORY.keys())
-        category = st.selectbox("📚 분류", categories, index=None, placeholder="과목을 선택하세요.")
-        
-        chapter = None
-        if category:
-            chapters = CHAPTERS_BY_CATEGORY[category]
-            chapter = st.selectbox("📖 단원", chapters, index=None, placeholder="단원을 선택하세요.")
+    title = st.text_input("📝 문제 제목", key="create_title")
+    
+    categories = list(CHAPTERS_BY_CATEGORY.keys())
+    category = st.selectbox("📚 분류", categories, index=None, placeholder="과목을 선택하세요.", key="create_category")
+    
+    chapter = None
+    if category:
+        chapters = CHAPTERS_BY_CATEGORY[category]
+        chapter = st.selectbox("📖 단원", chapters, index=None, placeholder="단원을 선택하세요.", key="create_chapter")
 
-        difficulty = st.selectbox("📊 난이도", ["하", "중", "상"], index=None, placeholder="난이도를 선택하세요.")
+    difficulty = st.selectbox("📊 난이도", ["하", "중", "상"], index=None, placeholder="난이도를 선택하세요.", key="create_difficulty")
 
-        question = st.text_area("❓ 문제 내용")
-        question_image = st.file_uploader("🖼️ 문제 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'])
-        explanation = st.text_area("📝 문제 풀이/해설")
-        explanation_image = st.file_uploader("🖼️ 해설 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'])
+    question = st.text_area("❓ 문제 내용", key="create_question")
+    question_image = st.file_uploader("🖼️ 문제 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'], key="create_q_image")
+    explanation = st.text_area("📝 문제 풀이/해설", key="create_explanation")
+    explanation_image = st.file_uploader("🖼️ 해설 이미지 추가 (선택)", type=['png', 'jpg', 'jpeg'], key="create_e_image")
 
-        options = ["", "", "", ""]
-        answer_payload = None
+    options = ["", "", "", ""]
+    answer_payload = None
 
-        if question_type == '객관식':
-            st.subheader("📝 선택지 입력")
-            options = [st.text_input(f"선택지 {i+1}") for i in range(4)]
-            answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=None)
-        else:
-            answer_payload = st.text_input("✅ 정답 입력")
+    if question_type == '객관식':
+        st.subheader("📝 선택지 입력")
+        options = [st.text_input(f"선택지 {i+1}", key=f"create_opt{i}") for i in range(4)]
+        answer_payload = st.radio("✅ 정답 선택", [f"선택지 {i+1}" for i in range(4)], index=None, key="create_answer_radio")
+    else:
+        answer_payload = st.text_input("✅ 정답 입력", key="create_answer_text")
 
-        submitted = st.form_submit_button("문제 제출하기", type="primary")
-
-    if submitted:
-        # 정답 매핑
+    if st.button("문제 제출하기", type="primary", key="create_submit"):
         final_answer = ""
         if question_type == '객관식':
             if answer_payload:
@@ -509,7 +496,6 @@ def render_creation_form(supabase, user_info):
             return
 
         with st.spinner('처리 중...'):
-            # 파일이 있을 때만 업로드 시도
             q_img_url, err1 = (None, None)
             if question_image:
                 q_img_url, err1 = upload_image_to_storage(supabase, SUPABASE_BUCKET_NAME, question_image)
@@ -521,20 +507,11 @@ def render_creation_form(supabase, user_info):
                 if err2: st.error(err2); return
 
             new_problem = {
-                "title": title,
-                "category": category,
-                "chapter": chapter,
-                "difficulty": difficulty,
-                "question": question,
-                "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
-                "answer": final_answer,
-                "creator_name": user_info["name"],
-                "creator_email": user_info["email"],
-                "explanation": explanation,
-                "question_type": question_type,
-                "question_image_url": q_img_url,
-                "explanation_image_url": e_img_url,
-                "created_at": datetime.now().isoformat()
+                "title": title, "category": category, "chapter": chapter, "difficulty": difficulty,
+                "question": question, "option1": options[0], "option2": options[1], "option3": options[2], "option4": options[3],
+                "answer": final_answer, "creator_name": user_info["name"], "creator_email": user_info["email"],
+                "explanation": explanation, "question_type": question_type, "question_image_url": q_img_url,
+                "explanation_image_url": e_img_url, "created_at": datetime.now().isoformat()
             }
             save_problem_to_db(supabase, new_problem)
             st.success("🎉 문제가 성공적으로 만들어졌습니다!")
