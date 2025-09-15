@@ -682,6 +682,7 @@ def run_app(supabase, user_info):
 def main():
     st.set_page_config(page_title="study-inside", layout="wide")
     st.title("📝 스터디인사이드")
+    apply_custom_css()
 
     if not all([CLIENT_ID, CLIENT_SECRET]):
         st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
