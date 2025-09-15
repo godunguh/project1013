@@ -269,20 +269,31 @@ def render_problem_list(problem_df):
     problem_df['sort_key'] = problem_df['title'].apply(korean_sort_key)
     problem_df = problem_df.sort_values(by='sort_key').drop(columns=['sort_key']).reset_index(drop=True)
 
-    # 카테고리 필터링
-    categories = ["전체"] + sorted(problem_df["category"].unique().tolist())
-    selected_category = st.selectbox("카테고리 선택", categories)
+    # --- 필터링 UI ---
+    col1, col2 = st.columns(2)
+    with col1:
+        categories = ["전체"] + sorted(problem_df["category"].unique().tolist())
+        selected_category = st.selectbox("카테고리 선택", categories)
+    with col2:
+        search_query = st.text_input("문제 제목으로 검색", placeholder="검색어를 입력하세요...")
 
+    # --- 데이터 필터링 ---
+    # 1. 카테고리 필터링
     if selected_category == "전체":
         filtered_df = problem_df
     else:
         filtered_df = problem_df[problem_df["category"] == selected_category]
 
+    # 2. 검색어 필터링
+    if search_query:
+        filtered_df = filtered_df[filtered_df['title'].str.contains(search_query, case=False, na=False)]
+
     if filtered_df.empty:
-        st.info(f"'{selected_category}' 카테고리에는 아직 문제가 없습니다.")
+        st.info("조건에 맞는 문제가 없습니다.")
         return
 
     # 문제 목록 표시
+    st.write(f"총 {len(filtered_df)}개의 문제를 찾았습니다.")
     for _, problem in filtered_df.iterrows():
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
