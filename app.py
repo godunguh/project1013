@@ -79,6 +79,25 @@ def apply_custom_css():
             h1 { color: white; font-size: 2.2rem; }
             h2 { border-bottom: 2px solid #0d6efd; padding-bottom: 0.5rem; color: #0d6efd; }
             @media (max-width: 768px) { h1 { font-size: 1.8rem; } }
+
+            /* Sidebar toggle button styling */
+            [data-testid="stSidebarNavToggler"] {
+                border: 2px solid #0d6efd; /* 파란색 테두리 */
+                background-color: #f0f2f6; /* 밝은 회색 배경 */
+                border-radius: 5px;
+                transition: background-color 0.2s;
+                animation: pulse-border 2.5s infinite; /* 애니메이션 적용 */
+            }
+            [data-testid="stSidebarNavToggler"]:hover {
+                background-color: #e0e2e6; /* 호버 시 약간 어두운 회색 */
+            }
+            
+            /* 버튼 주위에 파란색 그림자가 깜빡이는 애니메이션 */
+            @keyframes pulse-border {
+                0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+                70% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -524,16 +543,82 @@ def render_dashboard(problem_df, solution_df):
     """관리자용 대시보드 렌더링"""
     st.header("📊 관리자 대시보드")
     st.write("이곳에서 문제 및 풀이 통계를 확인할 수 있습니다.")
-    
-    tab1, tab2 = st.tabs(["문제 관리", "풀이 통계"])
+
+    # 사용자별 통계 데이터 가공
+    user_stats = pd.DataFrame()
+    if not problem_df.empty:
+        creation_counts = problem_df.groupby(['creator_name', 'creator_email']).size().reset_index(name='문제 생성 수')
+        creation_counts = creation_counts.rename(columns={'creator_name': '이름', 'creator_email': '이메일'})
+    else:
+        creation_counts = pd.DataFrame(columns=['이름', '이메일', '문제 생성 수'])
+
+    if not solution_df.empty:
+        solution_counts = solution_df.groupby(['user_name', 'user_email']).size().reset_index(name='문제 풀이 수')
+        solution_counts = solution_counts.rename(columns={'user_name': '이름', 'user_email': '이메일'})
+    else:
+        solution_counts = pd.DataFrame(columns=['이름', '이메일', '문제 풀이 수'])
+
+    if not creation_counts.empty or not solution_counts.empty:
+        user_stats = pd.merge(
+            creation_counts,
+            solution_counts,
+            on=['이름', '이메일'],
+            how='outer'
+        ).fillna(0)
+        user_stats['문제 생성 수'] = user_stats['문제 생성 수'].astype(int)
+        user_stats['문제 풀이 수'] = user_stats['문제 풀이 수'].astype(int)
+
+    tab1, tab2, tab3 = st.tabs(["사용자별 통계", "문제 통계", "풀이 통계"])
 
     with tab1:
-        st.subheader("등록된 문제 목록")
-        st.dataframe(problem_df)
+        st.subheader("사용자별 활동 요약")
+        if not user_stats.empty:
+            st.dataframe(user_stats.sort_values(by=['문제 생성 수', '문제 풀이 수'], ascending=False).reset_index(drop=True))
+        else:
+            st.warning("활동 기록이 없습니다.")
 
     with tab2:
+        st.subheader("등록된 문제 목록")
+        if not problem_df.empty:
+            problem_display_df = problem_df[[
+                'title', 'category', 'chapter', 'difficulty', 'creator_name', 'created_at'
+            ]].rename(columns={
+                'title': '제목',
+                'category': '과목',
+                'chapter': '단원',
+                'difficulty': '난이도',
+                'creator_name': '작성자',
+                'created_at': '생성일시'
+            })
+            st.dataframe(problem_display_df)
+        else:
+            st.warning("등록된 문제가 없습니다.")
+
+    with tab3:
         st.subheader("사용자 풀이 기록")
-        st.dataframe(solution_df)
+        if not solution_df.empty:
+            solution_display_df = solution_df.copy()
+            if not problem_df.empty:
+                problem_titles = problem_df[['id', 'title']]
+                solution_display_df = pd.merge(
+                    solution_display_df,
+                    problem_titles,
+                    left_on='problem_id',
+                    right_on='id',
+                    how='left'
+                )
+                solution_display_df['title'] = solution_display_df['title'].fillna('삭제된 문제')
+            else:
+                solution_display_df['title'] = '알 수 없음'
+
+            solution_display_df = solution_display_df[['user_name', 'title', 'solved_at']].rename(columns={
+                'user_name': '사용자',
+                'title': '문제 제목',
+                'solved_at': '풀이 일시'
+            })
+            st.dataframe(solution_display_df.sort_values(by='풀이 일시', ascending=False).reset_index(drop=True))
+        else:
+            st.warning("풀이 기록이 없습니다.")
 
 # --- 앱 실행 로직 ---
 def run_app(supabase, user_info):
@@ -584,8 +669,8 @@ def run_app(supabase, user_info):
 
 
 def main():
-    st.set_page_config(page_title="2학년 문제 공유 게시판", layout="wide")
-    st.title("📝 2학년 문제 공유 게시판")
+    st.set_page_config(page_title="study-inside", layout="wide")
+    st.title("📝 스터디인사이드")
 
     if not all([CLIENT_ID, CLIENT_SECRET]):
         st.error("OAuth2.0 클라이언트 ID와 시크릿이 secrets.toml 파일에 설정되지 않았습니다.")
